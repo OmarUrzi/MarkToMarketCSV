@@ -4,7 +4,7 @@ import { Header } from './components/Header';
 import { TabNavigation } from './components/TabNavigation';
 import { UploadSection } from './components/UploadSection';
 import { Dashboard } from './components/Dashboard';
-import { ChartSection } from './components/ChartSection';
+import { NewChartSection } from './components/NewChartSection';
 import { TradeHistory } from './components/TradeHistory';
 import { MarkToMarketAnalytics } from './components/MarkToMarketAnalytics';
 import { BacktestData } from './types';
@@ -193,10 +193,8 @@ function App() {
           )}
           
           <div className="mb-8">
-            <ChartSection 
+            <NewChartSection 
               data={backtestData} 
-              timeFilter={timeFilter}
-              onTimeFilterChange={setTimeFilter}
               selectedSymbol={selectedSymbol}
               csvTimezone={csvTimezone}
             />
