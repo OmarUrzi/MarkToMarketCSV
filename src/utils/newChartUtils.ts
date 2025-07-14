@@ -94,12 +94,11 @@ export const calculateBalanceHistory = (
   const sortedTrades = [...trades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
   
   let runningBalance = initialBalance;
-  const balanceHistory = [
-    {
-      time: new Date(sortedTrades[0].time).getTime() / 1000,
-      balance: initialBalance
-    }
-  ];
+  const balanceMap = new Map<number, number>();
+  
+  // Add initial balance
+  const firstTradeTime = Math.floor(new Date(sortedTrades[0].time).getTime() / 1000);
+  balanceMap.set(firstTradeTime, initialBalance);
 
   for (const trade of sortedTrades) {
     const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
@@ -108,13 +107,14 @@ export const calculateBalanceHistory = (
     
     runningBalance += profit + commission + swap;
     
-    balanceHistory.push({
-      time: new Date(trade.time).getTime() / 1000,
-      balance: runningBalance
-    });
+    const timeInSeconds = Math.floor(new Date(trade.time).getTime() / 1000);
+    balanceMap.set(timeInSeconds, runningBalance);
   }
 
-  return balanceHistory;
+  // Convert map to array and sort by time
+  return Array.from(balanceMap.entries())
+    .map(([time, balance]) => ({ time, balance }))
+    .sort((a, b) => a.time - b.time);
 };
 
 // Calculate drawdown history
@@ -128,12 +128,11 @@ export const calculateDrawdownHistory = (
   
   let runningBalance = initialBalance;
   let peakBalance = initialBalance;
-  const drawdownHistory = [
-    {
-      time: new Date(sortedTrades[0].time).getTime() / 1000,
-      drawdown: 0
-    }
-  ];
+  const drawdownMap = new Map<number, number>();
+  
+  // Add initial drawdown
+  const firstTradeTime = Math.floor(new Date(sortedTrades[0].time).getTime() / 1000);
+  drawdownMap.set(firstTradeTime, 0);
 
   for (const trade of sortedTrades) {
     const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
@@ -150,13 +149,14 @@ export const calculateDrawdownHistory = (
     // Calculate drawdown as percentage
     const drawdownPercent = peakBalance > 0 ? ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
     
-    drawdownHistory.push({
-      time: new Date(trade.time).getTime() / 1000,
-      drawdown: -drawdownPercent // Negative for display
-    });
+    const timeInSeconds = Math.floor(new Date(trade.time).getTime() / 1000);
+    drawdownMap.set(timeInSeconds, -drawdownPercent); // Negative for display
   }
 
-  return drawdownHistory;
+  // Convert map to array and sort by time
+  return Array.from(drawdownMap.entries())
+    .map(([time, drawdown]) => ({ time, drawdown }))
+    .sort((a, b) => a.time - b.time);
 };
 
 // Render period returns chart (bar chart)
