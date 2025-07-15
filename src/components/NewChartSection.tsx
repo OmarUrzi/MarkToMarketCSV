@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BacktestData } from '../types';
+import { BacktestData, Trade, DrillDownState } from '../types';
 import { 
   renderPeriodReturnsChart, 
   renderBalanceChart, 
   renderDrawdownChart,
-  DrillDownState
 } from '../utils/newChartUtils';
 
 interface NewChartSectionProps {
@@ -29,18 +28,26 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
   // Drill-down state for period returns chart
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({ level: 'monthly' });
 
-  // Filter trades for selected symbol
-  const symbolTrades = data?.tradeHistory?.filter(trade => 
-    trade.symbol === selectedSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
-  ) || [];
+  // Process trades for selected symbol
+  const processedTrades: Trade[] = data?.tradeHistory?.filter(trade => 
+    trade.symbol === selectedSymbol && 
+    trade.direction === 'out' &&
+    parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
+  ).map(trade => ({
+    closeTime: new Date(trade.time),
+    profit: parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'),
+    type: trade.type,
+    symbol: trade.symbol,
+    volume: parseFloat(trade.volume || '0')
+  })) || [];
 
   const initialBalance = data?.initialBalance || 10000;
 
   // Handle drill-down navigation
-  const handleDrillDown = (year: number, month: number, label: string) => {
+  const handleDrillDown = (period: Date) => {
     setDrillDownState({
       level: 'detailed',
-      selectedPeriod: { year, month, label }
+      selectedPeriod: period
     });
   };
 
@@ -50,12 +57,10 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
 
   // Period Returns Chart with drill-down
   useEffect(() => {
-    if (returnsChartRef.current && symbolTrades.length > 0) {
+    if (returnsChartRef.current && processedTrades.length > 0) {
       const { chart, cleanup } = renderPeriodReturnsChart(
         returnsChartRef.current,
-        symbolTrades,
-        initialBalance,
-        selectedSymbol,
+        processedTrades,
         drillDownState,
         handleDrillDown,
         handleDrillUp
@@ -76,7 +81,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, symbolTrades.length, initialBalance, drillDownState]);
+  }, [data, selectedSymbol, processedTrades.length, initialBalance, drillDownState]);
 
   // Balance Area Chart
   useEffect(() => {
