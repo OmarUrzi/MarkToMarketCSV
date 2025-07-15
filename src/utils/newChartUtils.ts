@@ -344,7 +344,14 @@ export const renderPeriodReturnsChart = (
   // Create chart container
   const chartContainer = document.createElement('div');
   chartContainer.style.height = 'calc(100% - 60px)';
+  chartContainer.style.position = 'relative';
   container.appendChild(chartContainer);
+
+  // Create popup container
+  const popupContainer = document.createElement('div');
+  popupContainer.className = 'absolute hidden bg-white border border-gray-300 rounded-lg shadow-lg z-50 max-w-md p-4';
+  popupContainer.style.pointerEvents = 'auto';
+  chartContainer.appendChild(popupContainer);
 
   const chart = createChart(chartContainer, {
     layout: {
@@ -451,54 +458,159 @@ export const renderPeriodReturnsChart = (
     });
   }
 
-  // Add tooltip for detailed view showing trade information
+  // Add custom labels and popup functionality for detailed view
   if (drillDownState.level === 'detailed') {
-    const tooltipContainer = document.createElement('div');
-    tooltipContainer.className = 'absolute hidden bg-gray-900 text-white text-xs rounded py-2 px-3 z-50 max-w-md shadow-lg border border-gray-700';
-    tooltipContainer.style.pointerEvents = 'none';
-    chartContainer.style.position = 'relative';
-    chartContainer.appendChild(tooltipContainer);
+    // Create overlay for custom labels and buttons
+    const overlay = document.createElement('div');
+    overlay.className = 'absolute inset-0 pointer-events-none';
+    overlay.style.zIndex = '10';
+    chartContainer.appendChild(overlay);
 
-    chart.subscribeCrosshairMove(param => {
-      if (param.time && param.point) {
-        const dataPoint = chartData.find(d => d.time === param.time);
-        if (dataPoint && dataPoint.originalData.trades.length > 0) {
-          const trades = dataPoint.originalData.trades;
-          const totalProfit = trades.reduce((sum, trade) => {
-            return sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-          }, 0);
-
-          tooltipContainer.innerHTML = `
-            <div class="space-y-2">
-              <div class="font-semibold border-b border-gray-600 pb-1">
-                ${dataPoint.originalData.period} - ${trades.length} Trade${trades.length > 1 ? 's' : ''}
-              </div>
-              <div class="text-xs">
-                <div>Total P/L: <span class="${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}">${totalProfit.toFixed(2)}</span></div>
-                <div>Return: <span class="${dataPoint.originalData.returnPercent >= 0 ? 'text-green-400' : 'text-red-400'}">${dataPoint.originalData.returnPercent.toFixed(2)}%</span></div>
-              </div>
-              <div class="space-y-1 max-h-32 overflow-y-auto">
-                ${trades.slice(0, 5).map(trade => `
-                  <div class="text-xs border-t border-gray-700 pt-1">
-                    <div>${trade.symbol} ${trade.type} ${trade.volume}</div>
-                    <div class="${parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 ? 'text-green-400' : 'text-red-400'}">
-                      P/L: ${trade.profit}
-                    </div>
-                  </div>
-                `).join('')}
-                ${trades.length > 5 ? `<div class="text-xs text-gray-400 text-center pt-1">... and ${trades.length - 5} more</div>` : ''}
-              </div>
-            </div>
-          `;
+    // Function to update labels
+    const updateLabels = () => {
+      overlay.innerHTML = '';
+      
+      const timeScale = chart.timeScale();
+      const priceScale = chart.priceScale();
+      
+      chartData.forEach(dataPoint => {
+        const coordinate = timeScale.timeToCoordinate(dataPoint.time);
+        const priceCoordinate = priceScale.priceToCoordinate(dataPoint.value);
+        
+        if (coordinate !== null && priceCoordinate !== null) {
+          // Calculate trade statistics
+          const buyTrades = dataPoint.originalData.trades.filter(t => t.type.toLowerCase() === 'buy');
+          const sellTrades = dataPoint.originalData.trades.filter(t => t.type.toLowerCase() === 'sell');
           
-          tooltipContainer.style.display = 'block';
-          tooltipContainer.style.left = `${param.point.x + 10}px`;
-          tooltipContainer.style.top = `${param.point.y - tooltipContainer.offsetHeight - 10}px`;
+          // Create percentage label (above bar)
+          const percentLabel = document.createElement('div');
+          percentLabel.className = 'absolute text-xs font-medium text-gray-700 pointer-events-none';
+          percentLabel.style.left = `${coordinate - 15}px`;
+          percentLabel.style.top = `${Math.min(priceCoordinate - 25, 10)}px`;
+          percentLabel.textContent = dataPoint.value.toFixed(1);
+          overlay.appendChild(percentLabel);
+          
+          // Create buy/sell label (below percentage)
+          const tradeLabel = document.createElement('div');
+          tradeLabel.className = 'absolute text-xs font-medium pointer-events-none flex items-center space-x-1';
+          tradeLabel.style.left = `${coordinate - 20}px`;
+          tradeLabel.style.top = `${Math.min(priceCoordinate - 10, 25)}px`;
+          
+          const buySpan = document.createElement('span');
+          buySpan.className = 'text-green-600';
+          buySpan.textContent = `${buyTrades.length}B`;
+          
+          const separator = document.createElement('span');
+          separator.className = 'text-gray-400';
+          separator.textContent = '/';
+          
+          const sellSpan = document.createElement('span');
+          sellSpan.className = 'text-red-600';
+          sellSpan.textContent = `${sellTrades.length}S`;
+          
+          tradeLabel.appendChild(buySpan);
+          tradeLabel.appendChild(separator);
+          tradeLabel.appendChild(sellSpan);
+          overlay.appendChild(tradeLabel);
+          
+          // Create info button (clickable)
+          if (dataPoint.originalData.trades.length > 0) {
+            const infoButton = document.createElement('button');
+            infoButton.className = 'absolute w-4 h-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors';
+            infoButton.style.left = `${coordinate + 15}px`;
+            infoButton.style.top = `${Math.min(priceCoordinate - 8, 30)}px`;
+            infoButton.style.pointerEvents = 'auto';
+            infoButton.innerHTML = 'i';
+            infoButton.title = 'Click to see trade details';
+            
+            infoButton.onclick = (e) => {
+              e.stopPropagation();
+              showTradePopup(dataPoint.originalData, coordinate, priceCoordinate);
+            };
+            
+            overlay.appendChild(infoButton);
+          }
         }
-      } else {
-        tooltipContainer.style.display = 'none';
+      });
+    };
+
+    // Function to show trade popup
+    const showTradePopup = (data: any, x: number, y: number) => {
+      const trades = data.trades;
+      const totalProfit = trades.reduce((sum: number, trade: any) => {
+        return sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+      }, 0);
+
+      const maxTradesShown = 5;
+      const hasMoreTrades = trades.length > maxTradesShown;
+      const tradesToShow = trades.slice(0, maxTradesShown);
+
+      popupContainer.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex justify-between items-center border-b border-gray-200 pb-2">
+            <div class="font-semibold text-gray-900">
+              ${trades.length} Trade${trades.length > 1 ? 's' : ''} at ${data.period}
+            </div>
+            <button class="text-gray-400 hover:text-gray-600 text-lg leading-none" onclick="this.parentElement.parentElement.parentElement.style.display='none'">×</button>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <div>Total P/L: <span class="${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'} font-medium">$${totalProfit.toFixed(2)}</span></div>
+            <div>Return: <span class="${data.returnPercent >= 0 ? 'text-green-600' : 'text-red-600'} font-medium">${data.returnPercent.toFixed(2)}%</span></div>
+          </div>
+          <div class="space-y-2 max-h-64 overflow-y-auto">
+            ${tradesToShow.map((trade: any, index: number) => `
+              <div class="text-sm border border-gray-200 rounded p-2 ${index === 0 ? '' : 'border-t'}">
+                <div class="flex justify-between items-center mb-1">
+                  <span class="font-medium ${trade.direction.toLowerCase() === 'in' ? 'text-green-600' : 'text-red-600'}">
+                    ${trade.direction.toUpperCase()} ${trade.type}
+                  </span>
+                  <span class="text-gray-600">${trade.symbol}</span>
+                </div>
+                <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                  <div>Volume: ${trade.volume}</div>
+                  <div>Price: $${parseFloat(trade.price).toFixed(5)}</div>
+                  <div class="${parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 ? 'text-green-600' : 'text-red-600'}">
+                    P/L: ${trade.profit}
+                  </div>
+                  <div>Deal: ${trade.deal}</div>
+                </div>
+              </div>
+            `).join('')}
+            ${hasMoreTrades ? `
+              <div class="text-xs text-gray-500 text-center py-2 border-t border-gray-200">
+                ... and ${trades.length - maxTradesShown} more trades
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+
+      // Position popup
+      const containerRect = chartContainer.getBoundingClientRect();
+      let left = x + 10;
+      let top = y - popupContainer.offsetHeight - 10;
+
+      // Adjust if popup goes outside container
+      if (left + 300 > containerRect.width) {
+        left = containerRect.width - 310;
       }
-    });
+      if (left < 0) {
+        left = 10;
+      }
+      if (top < 0) {
+        top = y + 10;
+      }
+
+      popupContainer.style.display = 'block';
+      popupContainer.style.left = `${left}px`;
+      popupContainer.style.top = `${top}px`;
+    };
+
+    // Initial label update
+    updateLabels();
+
+    // Update labels when chart is resized or scrolled
+    chart.timeScale().subscribeVisibleTimeRangeChange(updateLabels);
   }
   
   // Custom time scale formatting
@@ -739,7 +851,7 @@ export const renderDrawdownChart = (
     chart.applyOptions({ width: newRect.width, height: newRect.height });
   });
 
-  resizeObserver.observe(container);
+  resizeObserver.observe(chartContainer);
 
   return {
     chart,
