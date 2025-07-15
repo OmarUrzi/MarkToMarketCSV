@@ -57,13 +57,20 @@ export function renderBalanceChart(
 
   // Calculate running balance
   let runningBalance = initialBalance;
-  const balanceData: ChartData[] = trades.map(trade => {
+  const balanceMap = new Map<number, number>();
+  
+  trades.forEach(trade => {
     runningBalance += trade.profit;
-    return {
-      time: Math.floor(trade.closeTime.getTime() / 1000) as UTCTimestamp,
-      value: runningBalance,
-    };
+    const timestamp = Math.floor(trade.closeTime.getTime() / 1000);
+    balanceMap.set(timestamp, runningBalance);
   });
+
+  const balanceData: ChartData[] = Array.from(balanceMap.entries())
+    .map(([time, value]) => ({
+      time: time as UTCTimestamp,
+      value,
+    }))
+    .sort((a, b) => a.time - b.time);
 
   lineSeries.setData(balanceData);
 
@@ -434,16 +441,22 @@ export function renderDrawdownChart(
   // Calculate drawdown
   let runningBalance = initialBalance;
   let peak = initialBalance;
-  const drawdownData: ChartData[] = trades.map(trade => {
+  const drawdownMap = new Map<number, number>();
+  
+  trades.forEach(trade => {
     runningBalance += trade.profit;
     peak = Math.max(peak, runningBalance);
     const drawdown = runningBalance - peak;
-    
-    return {
-      time: Math.floor(trade.closeTime.getTime() / 1000) as UTCTimestamp,
-      value: drawdown,
-    };
+    const timestamp = Math.floor(trade.closeTime.getTime() / 1000);
+    drawdownMap.set(timestamp, drawdown);
   });
+    
+  const drawdownData: ChartData[] = Array.from(drawdownMap.entries())
+    .map(([time, value]) => ({
+      time: time as UTCTimestamp,
+      value,
+    }))
+    .sort((a, b) => a.time - b.time);
 
   areaSeries.setData(drawdownData);
 
