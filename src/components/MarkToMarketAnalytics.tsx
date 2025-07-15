@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar } from 'lucide-react';
+import { Calendar, ChevronDown, ChevronRight, Minus } from 'lucide-react';
 import { MarkToMarketItem } from '../types';
 import { MarkToMarketVisualizer } from './MarkToMarketVisualizer';
 import { formatMarkToMarketValue, formatPrice, formatVolume } from '../utils/numberFormatter';
@@ -9,6 +9,17 @@ interface MarkToMarketAnalyticsProps {
   selectedSymbol?: string;
   isLoadingSymbol?: boolean;
   csvTimezone?: number;
+}
+
+interface TradeDetails {
+  entryTime: string;
+  symbol: string;
+  type: string;
+  volume: number;
+  entryPrice: number;
+  currentPrice: number;
+  profit: number;
+  deal: string;
 }
 
 export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({ 
@@ -23,6 +34,7 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
   const [activeView, setActiveView] = useState<'table' | 'visualizer'>('table');
   const [frequency, setFrequency] = useState<'M15'>('M15');
   const [itemsPerPage, setItemsPerPage] = useState(50);
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   
   const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setStartDate(e.target.value);
@@ -37,6 +49,35 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toISOString().replace('T', ' ').slice(0, 16);
+  };
+
+  const toggleRowExpansion = (index: number) => {
+    const newExpandedRows = new Set(expandedRows);
+    if (newExpandedRows.has(index)) {
+      newExpandedRows.delete(index);
+    } else {
+      newExpandedRows.add(index);
+    }
+    setExpandedRows(newExpandedRows);
+  };
+
+  const collapseAllRows = () => {
+    setExpandedRows(new Set());
+  };
+
+  const calculateTradeStats = (trades: TradeDetails[] = []) => {
+    const buyTrades = trades.filter(trade => trade.type.toLowerCase() === 'buy');
+    const sellTrades = trades.filter(trade => trade.type.toLowerCase() === 'sell');
+    
+    const buyVolume = buyTrades.reduce((sum, trade) => sum + trade.volume, 0);
+    const sellVolume = sellTrades.reduce((sum, trade) => sum + trade.volume, 0);
+    
+    return {
+      buyCount: buyTrades.length,
+      sellCount: sellTrades.length,
+      buyVolume,
+      sellVolume
+    };
   };
   
   const safeData = Array.isArray(data) ? data : [];
@@ -119,11 +160,7 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
 
         {activeView === 'table' ? (
           <>
-            <div className="flex flex-wrap gap-4 mb-4">
-             
-            </div>
-              
-            <div className="flex items-center">
+            <div className="flex justify-between items-center mb-4">
               <div className="flex items-center space-x-2">
                 <span className="text-sm text-gray-600">Show:</span>
                 {[10, 20, 50, 100].map(size => (
@@ -141,9 +178,19 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
                   </button>
                 ))}
               </div>
+              
+              {expandedRows.size > 0 && (
+                <button
+                  onClick={collapseAllRows}
+                  className="flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  <Minus className="h-4 w-4 mr-1" />
+                  Collapse All
+                </button>
+              )}
             </div>
             
-            <p className="text-sm text-gray-500 mt-4">
+            <p className="text-sm text-gray-500 mb-4">
               Showing periods {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length}
             </p>
 
@@ -152,74 +199,175 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
                 <thead className="bg-gray-50">
                   <tr>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Details
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Date
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Pos
+                      Net Position
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Closed
+                      Buy Trades
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Sell Trades
+                    </th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Closed P/L
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       AEP
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      EOPeriod Price
+                      Market Price
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ConvertFX
+                      Open P/L
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Open
+                      Total P/L
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Open Trades
-                    </th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Current Drawdown
+                      Drawdown
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedData.map((item, index) => (
-                    <tr key={index}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(item.date)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatVolume(item.position)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatMarkToMarketValue(item.closed)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatPrice(item.aep)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatPrice(item.eoPeriodPrice)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.currentFX}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatMarkToMarketValue(item.open)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatMarkToMarketValue(item.total)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {item.openTradesCount || '0'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className={`${parseFloat(item.currentDrawdown || '0') > 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                          {item.currentDrawdown || '0.00%'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                  {paginatedData.map((item, index) => {
+                    const globalIndex = (currentPage - 1) * itemsPerPage + index;
+                    const isExpanded = expandedRows.has(globalIndex);
+                    const trades = (item.trades as TradeDetails[]) || [];
+                    const tradeStats = calculateTradeStats(trades);
+                    
+                    return (
+                      <React.Fragment key={index}>
+                        <tr className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <button
+                              onClick={() => toggleRowExpansion(globalIndex)}
+                              className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                              disabled={trades.length === 0}
+                            >
+                              {trades.length > 0 ? (
+                                isExpanded ? (
+                                  <ChevronDown className="h-4 w-4" />
+                                ) : (
+                                  <ChevronRight className="h-4 w-4" />
+                                )
+                              ) : (
+                                <span className="text-xs text-gray-300">-</span>
+                              )}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatDate(item.date)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatVolume(item.position)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="text-green-600 font-medium">
+                              {tradeStats.buyCount} trades
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              ({tradeStats.buyVolume.toFixed(2)} lots)
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <div className="text-red-600 font-medium">
+                              {tradeStats.sellCount} trades
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              ({tradeStats.sellVolume.toFixed(2)} lots)
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatMarkToMarketValue(item.closed)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatPrice(item.aep)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatPrice(item.eoPeriodPrice)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatMarkToMarketValue(item.open)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {formatMarkToMarketValue(item.total)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <span className={`${parseFloat(item.currentDrawdown || '0') > 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                              {item.currentDrawdown || '0.00%'}
+                            </span>
+                          </td>
+                        </tr>
+                        
+                        {isExpanded && trades.length > 0 && (
+                          <tr>
+                            <td colSpan={11} className="px-6 py-4 bg-gray-50">
+                              <div className="space-y-3">
+                                <h4 className="text-sm font-medium text-gray-900 mb-3">
+                                  Open Trades Details ({trades.length} trades)
+                                </h4>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
+                                    <thead className="bg-gray-100">
+                                      <tr>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Deal</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Volume</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Entry Time</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Entry Price</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Current Price</th>
+                                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Current P/L</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                      {trades.map((trade, tradeIndex) => (
+                                        <tr key={tradeIndex} className="hover:bg-gray-50">
+                                          <td className="px-4 py-2 text-sm text-gray-900">{trade.deal}</td>
+                                          <td className="px-4 py-2 text-sm text-gray-900 font-medium">{trade.symbol}</td>
+                                          <td className="px-4 py-2 text-sm">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                              trade.type.toLowerCase() === 'buy' 
+                                                ? 'bg-green-100 text-green-800' 
+                                                : 'bg-red-100 text-red-800'
+                                            }`}>
+                                              {trade.type.toUpperCase()}
+                                            </span>
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-900">{trade.volume.toFixed(2)}</td>
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            {new Date(trade.entryTime).toLocaleString()}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            ${trade.entryPrice.toFixed(5)}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm text-gray-900">
+                                            ${trade.currentPrice.toFixed(5)}
+                                          </td>
+                                          <td className="px-4 py-2 text-sm">
+                                            <span className={`font-medium ${
+                                              trade.profit >= 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                              ${trade.profit.toFixed(2)}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
