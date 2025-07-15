@@ -119,48 +119,6 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           </div>
         </div>
       </div>
-
-      {/* Upload Type Selection */}
-      <div className="mb-6 flex justify-center">
-        <div className="bg-gray-100 p-1 rounded-lg flex">
-          <button
-            onClick={() => setUploadType('csv')}
-            className={`
-              flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200
-              ${uploadType === 'csv' 
-                ? 'bg-white text-blue-600 shadow-sm' 
-                : 'text-gray-600 hover:text-gray-800'}
-            `}
-          >
-            <Table className="h-4 w-4 mr-2" />
-            CSV Data
-          </button>
-          <button
-            onClick={() => setUploadType('html')}
-            className={`
-              flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200
-              ${uploadType === 'html' 
-                ? 'bg-white text-blue-600 shadow-sm' 
-                : 'text-gray-600 hover:text-gray-800'}
-            `}
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            HTML Report
-          </button>
-        </div>
-      </div>
-            <p className="text-sm text-blue-700">
-              Select the timezone of your CSV/HTML data. This ensures proper synchronization with market data.
-            </p>
-          </div>
-          <TimezoneSelector
-            selectedTimezone={csvTimezone}
-            onTimezoneChange={onTimezoneChange}
-            disabled={isLoading}
-          />
-        </div>
-      </div>
-
       {/* Upload Type Selection */}
       <div className="mb-6 flex justify-center">
         <div className="bg-gray-100 p-1 rounded-lg flex">
