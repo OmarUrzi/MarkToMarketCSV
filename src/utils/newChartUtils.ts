@@ -509,7 +509,9 @@ export const renderPeriodReturnsChart = (
           percentLabel.style.left = `${coordinate - 15}px`;
           percentLabel.style.top = `${Math.min(priceCoordinate - 25, 10)}px`;
           percentLabel.textContent = dataPoint.value.toFixed(1);
-          overlay.appendChild(percentLabel);
+          if (pixelsPerBar >= 40) {
+  overlay.appendChild(percentLabel);
+}
           
           // Create buy/sell label (below percentage)
           const tradeLabel = document.createElement('div');
