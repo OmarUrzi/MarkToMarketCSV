@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BacktestData } from '../types';
 import { 
   renderPeriodReturnsChart, 
-  renderBalanceAreaChart, 
+  renderBalanceChart, 
   renderDrawdownChart,
   DrillDownState
 } from '../utils/newChartUtils';
@@ -81,7 +81,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
   // Balance Area Chart
   useEffect(() => {
     if (balanceChartRef.current && symbolTrades.length > 0) {
-      const { chart, cleanup } = renderBalanceAreaChart(
+      const { chart, cleanup } = renderBalanceChart(
         balanceChartRef.current,
         symbolTrades,
         initialBalance,
