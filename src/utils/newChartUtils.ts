@@ -395,8 +395,56 @@ export const renderPeriodReturnsChart = (
 
   histogramSeries.setData(chartData);
   
-  // Add markers with percentage labels and drill-down buttons
-  const markers = returns.map(item => ({
+  // Create combined markers ensuring proper time ordering
+  const combinedMarkers = returns.map(item => {
+    const timeInSeconds = Math.floor(item.startDate.getTime() / 1000);
+    const baseMarker = {
+      time: timeInSeconds,
+      position: 'inBar' as const,
+      color: 'transparent',
+      shape: 'circle' as const,
+      size: 0,
+      text: drillDownState.level === 'monthly' 
+        ? `${item.returnPercent.toFixed(1)}%` 
+        : `${item.returnPercent.toFixed(1)}%`
+    };
+
+    // For detailed view, add trade count information
+    if (drillDownState.level === 'detailed') {
+      const buyTrades = item.trades.filter(trade => trade.type.toLowerCase() === 'buy').length;
+      const sellTrades = item.trades.filter(trade => trade.type.toLowerCase() === 'sell').length;
+      
+      return [
+        baseMarker,
+        {
+          time: timeInSeconds,
+          position: 'aboveBar' as const,
+          color: 'transparent',
+          shape: 'circle' as const,
+          size: 0,
+          text: `B:${buyTrades} S:${sellTrades}`
+        }
+      ];
+    }
+
+    return [baseMarker];
+  }).flat();
+
+  // Sort markers by time to ensure ascending order
+  const sortedMarkers = combinedMarkers.sort((a, b) => a.time - b.time);
+
+  // Remove any duplicate time entries by keeping the last occurrence
+  const uniqueMarkers = sortedMarkers.reduce((acc, marker) => {
+    const existingIndex = acc.findIndex(m => m.time === marker.time && m.position === marker.position);
+    if (existingIndex >= 0) {
+      acc[existingIndex] = marker; // Replace with latest
+    } else {
+      acc.push(marker);
+    }
+    return acc;
+  }, [] as typeof sortedMarkers);
+
+  histogramSeries.setMarkers(uniqueMarkers);
     time: Math.floor(item.startDate.getTime() / 1000),
     position: 'inBar' as const,
     color: 'transparent',
