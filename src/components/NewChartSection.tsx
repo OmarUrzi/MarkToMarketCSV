@@ -85,10 +85,12 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
 
   // Balance Area Chart
   useEffect(() => {
-    if (balanceChartRef.current && processedTrades.length > 0) {
+    if (balanceChartRef.current && symbolTrades.length > 0) {
       const { chart, cleanup } = renderBalanceChart(
         balanceChartRef.current,
-        processedTrades
+        symbolTrades,
+        initialBalance,
+        selectedSymbol
       );
       
       setBalanceChartInstance(chart);
@@ -106,7 +108,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, processedTrades.length, initialBalance]);
+  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
 
   // Drawdown Chart
   useEffect(() => {
@@ -147,7 +149,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
               Period Returns - {selectedSymbol}
               {drillDownState.level === 'detailed' && drillDownState.selectedPeriod && (
                 <span className="text-sm text-gray-500 ml-2">
-                  ({drillDownState.selectedPeriod.label})
+                  ({drillDownState.selectedPeriod.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})
                 </span>
               )}
             </h3>
