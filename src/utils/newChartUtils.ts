@@ -851,7 +851,7 @@ export const renderDrawdownChart = (
     chart.applyOptions({ width: newRect.width, height: newRect.height });
   });
 
-  resizeObserver.observe(chartContainer);
+  resizeObserver.observe(container);
 
   return {
     chart,
