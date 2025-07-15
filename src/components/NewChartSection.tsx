@@ -85,12 +85,12 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
 
   // Balance Area Chart
   useEffect(() => {
-    if (balanceChartRef.current && symbolTrades.length > 0) {
+    if (balanceChartRef.current && processedTrades.length > 0) {
       const { chart, cleanup } = renderBalanceChart(
         balanceChartRef.current,
-        symbolTrades,
+        processedTrades,
         initialBalance,
-        selectedSymbol
+        csvTimezone
       );
       
       setBalanceChartInstance(chart);
@@ -108,16 +108,16 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
+  }, [data, selectedSymbol, processedTrades.length, initialBalance, csvTimezone]);
 
   // Drawdown Chart
   useEffect(() => {
-    if (drawdownChartRef.current && symbolTrades.length > 0) {
+    if (drawdownChartRef.current && processedTrades.length > 0) {
       const { chart, cleanup } = renderDrawdownChart(
         drawdownChartRef.current,
-        symbolTrades,
+        processedTrades,
         initialBalance,
-        selectedSymbol
+        csvTimezone
       );
       
       setDrawdownChartInstance(chart);
@@ -135,7 +135,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
+  }, [data, selectedSymbol, processedTrades.length, initialBalance, csvTimezone]);
   
   if (!data) return null;
   

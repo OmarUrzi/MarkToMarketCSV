@@ -22,7 +22,8 @@ export interface PeriodReturn {
 export function renderBalanceChart(
   container: HTMLElement,
   trades: Trade[],
-  timezone: string
+  initialBalance: number,
+  csvTimezone: number
 ): IChartApi | null {
   if (!container || trades.length === 0) return null;
 
@@ -55,7 +56,7 @@ export function renderBalanceChart(
   });
 
   // Calculate running balance
-  let runningBalance = 0;
+  let runningBalance = initialBalance;
   const balanceData: ChartData[] = trades.map(trade => {
     runningBalance += trade.profit;
     return {
@@ -395,7 +396,8 @@ function hideTooltip(tooltip: HTMLElement): void {
 export function renderDrawdownChart(
   container: HTMLElement,
   trades: Trade[],
-  timezone: string
+  initialBalance: number,
+  csvTimezone: number
 ): IChartApi | null {
   if (!container || trades.length === 0) return null;
 
@@ -430,8 +432,8 @@ export function renderDrawdownChart(
   });
 
   // Calculate drawdown
-  let runningBalance = 0;
-  let peak = 0;
+  let runningBalance = initialBalance;
+  let peak = initialBalance;
   const drawdownData: ChartData[] = trades.map(trade => {
     runningBalance += trade.profit;
     peak = Math.max(peak, runningBalance);
