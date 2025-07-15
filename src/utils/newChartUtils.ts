@@ -511,7 +511,6 @@ export const renderPeriodReturnsChart = (
           percentLabel.textContent = dataPoint.value.toFixed(1);
           
           
-          
           // Create buy/sell label (below percentage)
           const tradeLabel = document.createElement('div');
           tradeLabel.className = 'absolute text-xs font-medium pointer-events-none flex items-center space-x-1';
@@ -545,6 +544,7 @@ export const renderPeriodReturnsChart = (
             // Only show when bars are spaced at least 40 pixels apart
             if (pixelsPerBar >= 40) {
               overlay.appendChild(tradeLabel);
+              overlay.appendChild(percentLabel);
             }
           }
           
