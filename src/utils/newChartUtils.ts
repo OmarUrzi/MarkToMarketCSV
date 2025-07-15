@@ -459,7 +459,7 @@ export const renderPeriodReturnsChart = (
   }
 
   // Add custom labels and popup functionality for detailed view
-  if (drillDownState.level === 'detailed') {
+  if (drillDownState.level === 'detailed' && drillDownState.selectedPeriod) {
     // Create overlay for custom labels and buttons
     const overlay = document.createElement('div');
     overlay.className = 'absolute inset-0 pointer-events-none';
@@ -542,7 +542,7 @@ export const renderPeriodReturnsChart = (
 
       const maxTradesShown = 5;
       const hasMoreTrades = trades.length > maxTradesShown;
-      const tradesToShow = trades.slice(0, maxTradesShown);
+      const tradesToShow = trades; // Show ALL trades, not just first 5
 
       popupContainer.innerHTML = `
         <div class="space-y-3">
@@ -575,11 +575,6 @@ export const renderPeriodReturnsChart = (
                 </div>
               </div>
             `).join('')}
-            ${hasMoreTrades ? `
-              <div class="text-xs text-gray-500 text-center py-2 border-t border-gray-200">
-                ... and ${trades.length - maxTradesShown} more trades
-              </div>
-            ` : ''}
           </div>
         </div>
       `;
