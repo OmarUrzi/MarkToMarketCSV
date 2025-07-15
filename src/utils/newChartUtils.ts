@@ -402,9 +402,31 @@ export const renderPeriodReturnsChart = (
     color: 'transparent',
     shape: 'circle' as const,
     size: 0,
-    text: item.returnPercent.toFixed(1)
+    text: drillDownState.level === 'monthly' 
+      ? `${item.returnPercent.toFixed(1)}%` 
+      : `${item.returnPercent.toFixed(1)}%`
   }));
   
+  // Add additional markers for trade counts in detailed view
+  if (drillDownState.level === 'detailed') {
+    const tradeCountMarkers = returns.map(item => {
+      const buyTrades = item.trades.filter(trade => trade.type.toLowerCase() === 'buy').length;
+      const sellTrades = item.trades.filter(trade => trade.type.toLowerCase() === 'sell').length;
+      
+      return {
+        time: Math.floor(item.startDate.getTime() / 1000),
+        position: 'aboveBar' as const,
+        color: 'transparent',
+        shape: 'circle' as const,
+        size: 0,
+        text: `B:${buyTrades} S:${sellTrades}`
+      };
+    });
+    
+    histogramSeries.setMarkers([...markers, ...tradeCountMarkers]);
+  } else {
+    histogramSeries.setMarkers(markers);
+  }
   histogramSeries.setMarkers(markers);
 
   // Add click handlers for drill-down (only for monthly view)
@@ -454,49 +476,116 @@ export const renderPeriodReturnsChart = (
   // Add tooltip for detailed view showing trade information
   if (drillDownState.level === 'detailed') {
     const tooltipContainer = document.createElement('div');
-    tooltipContainer.className = 'absolute hidden bg-gray-900 text-white text-xs rounded py-2 px-3 z-50 max-w-md shadow-lg border border-gray-700';
-    tooltipContainer.style.pointerEvents = 'none';
+    tooltipContainer.className = 'absolute hidden bg-gray-900 text-white text-xs rounded py-2 px-3 z-50 max-w-lg shadow-lg border border-gray-700';
+    tooltipContainer.style.pointerEvents = 'auto'; // Allow interaction
     chartContainer.style.position = 'relative';
     chartContainer.appendChild(tooltipContainer);
+
+    // Add close button functionality
+    let tooltipTimeout: NodeJS.Timeout | null = null;
+    let isTooltipHovered = false;
 
     chart.subscribeCrosshairMove(param => {
       if (param.time && param.point) {
         const dataPoint = chartData.find(d => d.time === param.time);
         if (dataPoint && dataPoint.originalData.trades.length > 0) {
           const trades = dataPoint.originalData.trades;
+          const buyTrades = trades.filter(trade => trade.type.toLowerCase() === 'buy');
+          const sellTrades = trades.filter(trade => trade.type.toLowerCase() === 'sell');
           const totalProfit = trades.reduce((sum, trade) => {
             return sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
           }, 0);
 
           tooltipContainer.innerHTML = `
             <div class="space-y-2">
-              <div class="font-semibold border-b border-gray-600 pb-1">
-                ${dataPoint.originalData.period} - ${trades.length} Trade${trades.length > 1 ? 's' : ''}
+              <div class="flex justify-between items-center">
+                <div class="font-semibold border-b border-gray-600 pb-1 flex-1">
+                  ${dataPoint.originalData.period} - ${trades.length} Trade${trades.length > 1 ? 's' : ''}
+                </div>
+                <button class="ml-2 text-gray-400 hover:text-white text-lg leading-none" onclick="this.parentElement.parentElement.parentElement.style.display='none'">×</button>
               </div>
-              <div class="text-xs">
-                <div>Total P/L: <span class="${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}">${totalProfit.toFixed(2)}</span></div>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>Total P/L: <span class="${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}">$${totalProfit.toFixed(2)}</span></div>
                 <div>Return: <span class="${dataPoint.originalData.returnPercent >= 0 ? 'text-green-400' : 'text-red-400'}">${dataPoint.originalData.returnPercent.toFixed(2)}%</span></div>
+                <div class="text-green-400">Buy: ${buyTrades.length}</div>
+                <div class="text-red-400">Sell: ${sellTrades.length}</div>
               </div>
-              <div class="space-y-1 max-h-32 overflow-y-auto">
-                ${trades.slice(0, 5).map(trade => `
+              <div class="space-y-1 max-h-48 overflow-y-auto pr-1">
+                ${trades.map((trade, index) => `
                   <div class="text-xs border-t border-gray-700 pt-1">
-                    <div>${trade.symbol} ${trade.type} ${trade.volume}</div>
-                    <div class="${parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 ? 'text-green-400' : 'text-red-400'}">
-                      P/L: ${trade.profit}
+                    <div class="flex justify-between">
+                      <span class="${trade.type.toLowerCase() === 'buy' ? 'text-green-400' : 'text-red-400'}">
+                        ${trade.type.toUpperCase()} ${trade.symbol}
+                      </span>
+                      <span>Vol: ${trade.volume}</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span>Price: $${parseFloat(trade.price).toFixed(5)}</span>
+                      <span class="${parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 ? 'text-green-400' : 'text-red-400'}">
+                        P/L: ${trade.profit}
+                      </span>
                     </div>
                   </div>
                 `).join('')}
-                ${trades.length > 5 ? `<div class="text-xs text-gray-400 text-center pt-1">... and ${trades.length - 5} more</div>` : ''}
               </div>
             </div>
           `;
           
+          // Position tooltip
+          const containerRect = container.getBoundingClientRect();
+          const tooltipRect = tooltipContainer.getBoundingClientRect();
+          
+          let left = param.point?.x || 0;
+          let top = (param.point?.y || 0) - tooltipContainer.offsetHeight - 10;
+          
+          // Adjust if tooltip goes outside container
+          if (left + tooltipContainer.offsetWidth > containerRect.width) {
+            left = containerRect.width - tooltipContainer.offsetWidth - 10;
+          }
+          if (left < 0) {
+            left = 10;
+          }
+          if (top < 0) {
+            top = (param.point?.y || 0) + 10; // Show below cursor if no space above
+          }
+          
           tooltipContainer.style.display = 'block';
-          tooltipContainer.style.left = `${param.point.x + 10}px`;
-          tooltipContainer.style.top = `${param.point.y - tooltipContainer.offsetHeight - 10}px`;
+          tooltipContainer.style.left = `${left}px`;
+          tooltipContainer.style.top = `${top}px`;
+          
+          // Clear any existing timeout
+          if (tooltipTimeout) {
+            clearTimeout(tooltipTimeout);
+            tooltipTimeout = null;
+          }
+          
+          // Add hover listeners to tooltip
+          tooltipContainer.onmouseenter = () => {
+            isTooltipHovered = true;
+            if (tooltipTimeout) {
+              clearTimeout(tooltipTimeout);
+              tooltipTimeout = null;
+            }
+          };
+          
+          tooltipContainer.onmouseleave = () => {
+            isTooltipHovered = false;
+            tooltipTimeout = setTimeout(() => {
+              if (!isTooltipHovered) {
+                tooltipContainer.style.display = 'none';
+              }
+            }, 300);
+          };
         }
       } else {
-        tooltipContainer.style.display = 'none';
+        // Hide tooltip with delay if not hovering over it
+        if (!isTooltipHovered) {
+          tooltipTimeout = setTimeout(() => {
+            if (!isTooltipHovered) {
+              tooltipContainer.style.display = 'none';
+            }
+          }, 100);
+        }
       }
     });
   }
