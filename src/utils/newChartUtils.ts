@@ -471,11 +471,10 @@ export const renderPeriodReturnsChart = (
       overlay.innerHTML = '';
       
       const timeScale = chart.timeScale();
-      const priceScale = chart.priceScale();
       
       chartData.forEach(dataPoint => {
         const coordinate = timeScale.timeToCoordinate(dataPoint.time);
-        const priceCoordinate = priceScale.priceToCoordinate(dataPoint.value);
+        const priceCoordinate = histogramSeries.priceToCoordinate(dataPoint.value);
         
         if (coordinate !== null && priceCoordinate !== null) {
           // Calculate trade statistics
