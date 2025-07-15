@@ -451,7 +451,7 @@ const findDealsTable = (doc: Document): HTMLTableElement | null => {
   return null;
 };
 
-export const parseHtmlFile = async (file: File, csvTimezone: number = 0): Promise<BacktestData> => {
+export const parseHtmlFile = async (file: File, csvTimezone: number = 0, customInitialBalance?: number): Promise<BacktestData> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -498,6 +498,7 @@ export const parseHtmlFile = async (file: File, csvTimezone: number = 0): Promis
         const currencyPair = extractSymbolFromHTML(doc) || 'XAUUSD';
         const availableSymbols = extractAllSymbolsFromHTML(doc);
         const expertName = extractExpertNameFromHTML(doc) || 'Unknown Expert';
+        const finalInitialBalance = customInitialBalance || initialBalance;
 
         if (!dealsTable) {
           console.error('Deals table not found. Document structure:', {
@@ -593,7 +594,7 @@ export const parseHtmlFile = async (file: File, csvTimezone: number = 0): Promis
                 csvTimeToApiTime(fromDate.toISOString(), csvTimezone),
                 csvTimeToApiTime(toDate.toISOString(), csvTimezone)
               );
-              markToMarketData = parseMarketData(marketData, tradeHistory, initialBalance, currencyPair, csvTimezone);
+              markToMarketData = parseMarketData(marketData, tradeHistory, finalInitialBalance, currencyPair, csvTimezone);
             } catch (error) {
               console.error('Market data fetch error:', {
                 error,
@@ -612,7 +613,7 @@ export const parseHtmlFile = async (file: File, csvTimezone: number = 0): Promis
           winRate: `${winRate}%`,
           totalTrades: mainSymbolTrades.length.toString(),
           maxDrawdown: `${drawdown}%`,
-          initialBalance,
+          initialBalance: finalInitialBalance,
           tradeHistory,
           markToMarketData,
           chartData: [],

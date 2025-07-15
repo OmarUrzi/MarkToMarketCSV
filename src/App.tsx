@@ -23,6 +23,7 @@ function App() {
   const [selectedSymbol, setSelectedSymbol] = useState<string>('');
   const [isLoadingSymbol, setIsLoadingSymbol] = useState(false);
   const [csvTimezone, setCsvTimezone] = useState<number>(0); // GMT+0 (UTC) default - this is the CSV data timezone
+  const [initialAmount, setInitialAmount] = useState<number>(10000);
 
   const handleFileUpload = async (file: File, timezone: number = csvTimezone) => {
     try {
@@ -35,10 +36,10 @@ function App() {
 
       if (fileName.endsWith('.csv')) {
         // Handle CSV file
-        data = await parseCSVFile(file, timezone);
+        data = await parseCSVFile(file, timezone, initialAmount);
       } else if (fileName.endsWith('.htm') || fileName.endsWith('.html')) {
         // Handle HTML file
-        data = await parseHtmlFile(file, timezone);
+        data = await parseHtmlFile(file, timezone, initialAmount);
       } else {
         throw new Error('Please upload either an HTML file from MT4/MT5 backtest report or a CSV file with trade data');
       }
@@ -165,6 +166,8 @@ function App() {
           error={error}
           csvTimezone={csvTimezone}
           onTimezoneChange={setCsvTimezone}
+          initialAmount={initialAmount}
+          onInitialAmountChange={setInitialAmount}
         />
       ) : (
         <>

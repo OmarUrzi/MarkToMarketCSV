@@ -547,7 +547,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
   return markToMarketData;
 };
 
-export const parseCSVFile = async (file: File, csvTimezone: number = 0): Promise<BacktestData> => {
+export const parseCSVFile = async (file: File, csvTimezone: number = 0, customInitialBalance: number = 10000): Promise<BacktestData> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -570,7 +570,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0): Promise
         // Parse all rows into trade history and complete trades
         const tradeHistory: TradeHistoryItem[] = [];
         const completeTrades: CompleteTrade[] = [];
-        let runningBalance = 10000; // Starting balance
+        let runningBalance = customInitialBalance; // Starting balance
 
         dataRows.forEach((values, index) => {
           const { openTrade, closeTrade, completeTrade } = parseCSVRow(values, headers, index);
@@ -631,7 +631,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0): Promise
 
         // Generate mark-to-market data using the complete trades and API calls
         console.log('Generating mark-to-market data with API calls using entry times...');
-        const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, 10000, csvTimezone);
+        const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
 
         const backtestData: BacktestData = {
           currencyPair: mainSymbol,
@@ -640,7 +640,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0): Promise
           winRate: `${winRate}%`,
           totalTrades: mainSymbolTrades.length.toString(),
           maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
-          initialBalance: 10000,
+          initialBalance: customInitialBalance,
           tradeHistory,
           markToMarketData,
           chartData: [],

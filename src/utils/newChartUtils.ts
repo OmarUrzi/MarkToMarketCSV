@@ -213,6 +213,7 @@ export const renderPeriodReturnsChart = (
 
   const histogramSeries = chart.addHistogramSeries({
     color: '#22c55e',
+    base: 0,
     priceFormat: {
       type: 'percent',
       precision: 2,
@@ -220,12 +221,36 @@ export const renderPeriodReturnsChart = (
   });
 
   const chartData = returns.map(item => ({
-    time: item.startDate.getTime() / 1000,
+    time: Math.floor(item.startDate.getTime() / 1000),
     value: item.returnPercent,
     color: item.returnPercent >= 0 ? '#22c55e' : '#ef4444'
   }));
 
   histogramSeries.setData(chartData);
+  
+  // Add markers with percentage labels
+  const markers = returns.map(item => ({
+    time: Math.floor(item.startDate.getTime() / 1000),
+    position: 'inBar' as const,
+    color: 'transparent',
+    shape: 'circle' as const,
+    size: 0,
+    text: item.returnPercent.toFixed(1)
+  }));
+  
+  histogramSeries.setMarkers(markers);
+  
+  // Custom time scale formatting
+  chart.applyOptions({
+    timeScale: {
+      timeVisible: true,
+      tickMarkFormatter: (time: number) => {
+        const date = new Date(time * 1000);
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${monthNames[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
+      }
+    }
+  });
 
   // Add zero line
   const zeroLineSeries = chart.addLineSeries({
@@ -313,9 +338,9 @@ export const renderBalanceAreaChart = (
   });
 
   const areaSeries = chart.addAreaSeries({
-    lineColor: '#2563eb',
-    topColor: 'rgba(37, 99, 235, 0.4)',
-    bottomColor: 'rgba(37, 99, 235, 0.1)',
+    lineColor: '#ef4444', // Red line color
+    topColor: '#ef4444', // Red at top
+    bottomColor: '#22c55e', // Green at bottom
     lineWidth: 2,
     priceFormat: {
       type: 'price',

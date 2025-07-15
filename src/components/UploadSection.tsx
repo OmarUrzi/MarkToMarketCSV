@@ -8,6 +8,8 @@ interface UploadSectionProps {
   error: string | null;
   csvTimezone: number;
   onTimezoneChange: (timezone: number) => void;
+  initialAmount: number;
+  onInitialAmountChange: (amount: number) => void;
 }
 
 export const UploadSection: React.FC<UploadSectionProps> = ({ 
@@ -15,11 +17,13 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   onLoadMockData, 
   error, 
   csvTimezone, 
-  onTimezoneChange 
+  onTimezoneChange,
+  initialAmount,
+  onInitialAmountChange
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [uploadType, setUploadType] = useState<'html' | 'csv'>('html');
+  const [uploadType, setUploadType] = useState<'html' | 'csv'>('csv');
   
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -70,9 +74,81 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     <div className="mt-8 p-8">
       {/* Timezone Selector */}
       <div className="mb-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-center justify-between">
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium text-blue-900 mb-2">Configuration</h3>
+          
+          <div className="flex items-center justify-between">
+            <div>
+              <h4 className="text-md font-medium text-blue-900 mb-1">Data Timezone</h4>
+              <p className="text-sm text-blue-700">
+                Select the timezone of your CSV/HTML data for proper synchronization.
+              </p>
+            </div>
+            <TimezoneSelector
+              selectedTimezone={csvTimezone}
+              onTimezoneChange={onTimezoneChange}
+              disabled={isLoading}
+            />
+          </div>
+          
           <div>
-            <h3 className="text-lg font-medium text-blue-900 mb-2">Configure Data Timezone</h3>
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-md font-medium text-blue-900 mb-1">Initial Account Balance</h4>
+                <p className="text-sm text-blue-700">
+                  Set the starting balance for calculations and analysis.
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-blue-700 font-medium">$</span>
+                <input
+                  type="number"
+                  value={initialAmount}
+                  onChange={(e) => onInitialAmountChange(Number(e.target.value))}
+                  disabled={isLoading}
+                  className={`
+                    px-3 py-2 border border-blue-300 rounded-md text-sm bg-white min-w-[120px]
+                    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+                    ${isLoading ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'cursor-text hover:border-blue-400'}
+                  `}
+                  min="0"
+                  step="1000"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Upload Type Selection */}
+      <div className="mb-6 flex justify-center">
+        <div className="bg-gray-100 p-1 rounded-lg flex">
+          <button
+            onClick={() => setUploadType('csv')}
+            className={`
+              flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200
+              ${uploadType === 'csv' 
+                ? 'bg-white text-blue-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-800'}
+            `}
+          >
+            <Table className="h-4 w-4 mr-2" />
+            CSV Data
+          </button>
+          <button
+            onClick={() => setUploadType('html')}
+            className={`
+              flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200
+              ${uploadType === 'html' 
+                ? 'bg-white text-blue-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-800'}
+            `}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            HTML Report
+          </button>
+        </div>
+      </div>
             <p className="text-sm text-blue-700">
               Select the timezone of your CSV/HTML data. This ensures proper synchronization with market data.
             </p>
