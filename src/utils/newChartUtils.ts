@@ -402,17 +402,39 @@ export const renderPeriodReturnsChart = (
 
   histogramSeries.setData(chartData);
   
-  // Add markers with percentage labels and drill-down buttons
-  const markers = returns.map(item => ({
-    time: Math.floor(item.startDate.getTime() / 1000),
-    position: 'inBar' as const,
-    color: 'transparent',
-    shape: 'circle' as const,
-    size: 0,
-    text: item.returnPercent.toFixed(1)
-  }));
+  // Add markers with percentage labels only when zoomed in enough
+  const updateMarkers = () => {
+    const timeScale = chart.timeScale();
+    const visibleRange = timeScale.getVisibleLogicalRange();
+    
+    if (visibleRange) {
+      const containerWidth = chartContainer.clientWidth;
+      const visibleBars = visibleRange.to - visibleRange.from;
+      const pixelsPerBar = containerWidth / visibleBars;
+      
+      // Only show percentage markers when zoomed in enough
+      if (pixelsPerBar >= 40) {
+        const markers = returns.map(item => ({
+          time: Math.floor(item.startDate.getTime() / 1000),
+          position: 'inBar' as const,
+          color: 'transparent',
+          shape: 'circle' as const,
+          size: 0,
+          text: item.returnPercent.toFixed(1)
+        }));
+        histogramSeries.setMarkers(markers);
+      } else {
+        // Clear markers when zoomed out
+        histogramSeries.setMarkers([]);
+      }
+    }
+  };
   
-  histogramSeries.setMarkers(markers);
+  // Initial markers update
+  updateMarkers();
+  
+  // Update markers when user zooms or pans
+  chart.timeScale().subscribeVisibleTimeRangeChange(updateMarkers);
 
   // Add click handlers for drill-down (only for monthly view)
   if (drillDownState.level === 'monthly' && onDrillDown) {
