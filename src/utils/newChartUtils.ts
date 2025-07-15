@@ -497,7 +497,7 @@ export const renderPeriodReturnsChart = (
           
           const buySpan = document.createElement('span');
           buySpan.className = 'text-green-600';
-          buySpan.textContent = `${buyTrades.length}B`;
+          buySpan.textContent = `${buyTrades.length}`;
           
           const separator = document.createElement('span');
           separator.className = 'text-gray-400';
@@ -505,18 +505,31 @@ export const renderPeriodReturnsChart = (
           
           const sellSpan = document.createElement('span');
           sellSpan.className = 'text-red-600';
-          sellSpan.textContent = `${sellTrades.length}S`;
+          sellSpan.textContent = `${sellTrades.length}`;
           
           tradeLabel.appendChild(buySpan);
           tradeLabel.appendChild(separator);
           tradeLabel.appendChild(sellSpan);
-          overlay.appendChild(tradeLabel);
+          
+          // Only show labels when zoomed in enough (check bar spacing)
+          const timeScale = chart.timeScale();
+          const visibleRange = timeScale.getVisibleLogicalRange();
+          if (visibleRange) {
+            const containerWidth = chartContainer.clientWidth;
+            const visibleBars = visibleRange.to - visibleRange.from;
+            const pixelsPerBar = containerWidth / visibleBars;
+            
+            // Only show when bars are spaced at least 40 pixels apart
+            if (pixelsPerBar >= 40) {
+              overlay.appendChild(tradeLabel);
+            }
+          }
           
           // Create info button (clickable)
           if (dataPoint.originalData.trades.length > 0) {
             const infoButton = document.createElement('button');
             infoButton.className = 'absolute w-4 h-4 bg-blue-500 text-white text-xs rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors';
-            infoButton.style.left = `${coordinate + 15}px`;
+            infoButton.style.left = `${coordinate + 30}px`;
             infoButton.style.top = `${Math.min(priceCoordinate - 8, 30)}px`;
             infoButton.style.pointerEvents = 'auto';
             infoButton.innerHTML = 'i';
@@ -527,7 +540,16 @@ export const renderPeriodReturnsChart = (
               showTradePopup(dataPoint.originalData, coordinate, priceCoordinate);
             };
             
-            overlay.appendChild(infoButton);
+            // Only show info button when labels are visible
+            if (visibleRange) {
+              const containerWidth = chartContainer.clientWidth;
+              const visibleBars = visibleRange.to - visibleRange.from;
+              const pixelsPerBar = containerWidth / visibleBars;
+              
+              if (pixelsPerBar >= 40) {
+                overlay.appendChild(infoButton);
+              }
+            }
           }
         }
       });
