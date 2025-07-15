@@ -85,12 +85,10 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
 
   // Balance Area Chart
   useEffect(() => {
-    if (balanceChartRef.current && symbolTrades.length > 0) {
+    if (balanceChartRef.current && processedTrades.length > 0) {
       const { chart, cleanup } = renderBalanceChart(
         balanceChartRef.current,
-        symbolTrades,
-        initialBalance,
-        selectedSymbol
+        processedTrades
       );
       
       setBalanceChartInstance(chart);
@@ -108,7 +106,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
+  }, [data, selectedSymbol, processedTrades.length, initialBalance]);
 
   // Drawdown Chart
   useEffect(() => {
