@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BacktestData, Trade, DrillDownState } from '../types';
+import { BacktestData } from '../types';
 import { 
   renderPeriodReturnsChart, 
-  renderBalanceChart, 
+  renderBalanceAreaChart, 
   renderDrawdownChart,
+  DrillDownState
 } from '../utils/newChartUtils';
 
 interface NewChartSectionProps {
@@ -28,26 +29,18 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
   // Drill-down state for period returns chart
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({ level: 'monthly' });
 
-  // Process trades for selected symbol
-  const processedTrades: Trade[] = data?.tradeHistory?.filter(trade => 
-    trade.symbol === selectedSymbol && 
-    trade.direction === 'out' &&
-    parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
-  ).map(trade => ({
-    closeTime: new Date(trade.time),
-    profit: parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'),
-    type: trade.type,
-    symbol: trade.symbol,
-    volume: parseFloat(trade.volume || '0')
-  })) || [];
+  // Filter trades for selected symbol
+  const symbolTrades = data?.tradeHistory?.filter(trade => 
+    trade.symbol === selectedSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
+  ) || [];
 
   const initialBalance = data?.initialBalance || 10000;
 
   // Handle drill-down navigation
-  const handleDrillDown = (period: Date) => {
+  const handleDrillDown = (year: number, month: number, label: string) => {
     setDrillDownState({
       level: 'detailed',
-      selectedPeriod: period
+      selectedPeriod: { year, month, label }
     });
   };
 
@@ -57,10 +50,12 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
 
   // Period Returns Chart with drill-down
   useEffect(() => {
-    if (returnsChartRef.current && processedTrades.length > 0) {
+    if (returnsChartRef.current && symbolTrades.length > 0) {
       const { chart, cleanup } = renderPeriodReturnsChart(
         returnsChartRef.current,
-        processedTrades,
+        symbolTrades,
+        initialBalance,
+        selectedSymbol,
         drillDownState,
         handleDrillDown,
         handleDrillUp
@@ -81,16 +76,16 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, processedTrades.length, initialBalance, drillDownState]);
+  }, [data, selectedSymbol, symbolTrades.length, initialBalance, drillDownState]);
 
   // Balance Area Chart
   useEffect(() => {
-    if (balanceChartRef.current && processedTrades.length > 0) {
-      const { chart, cleanup } = renderBalanceChart(
+    if (balanceChartRef.current && symbolTrades.length > 0) {
+      const { chart, cleanup } = renderBalanceAreaChart(
         balanceChartRef.current,
-        processedTrades,
+        symbolTrades,
         initialBalance,
-        csvTimezone
+        selectedSymbol
       );
       
       setBalanceChartInstance(chart);
@@ -108,16 +103,16 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, processedTrades.length, initialBalance, csvTimezone]);
+  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
 
   // Drawdown Chart
   useEffect(() => {
-    if (drawdownChartRef.current && processedTrades.length > 0) {
+    if (drawdownChartRef.current && symbolTrades.length > 0) {
       const { chart, cleanup } = renderDrawdownChart(
         drawdownChartRef.current,
-        processedTrades,
+        symbolTrades,
         initialBalance,
-        csvTimezone
+        selectedSymbol
       );
       
       setDrawdownChartInstance(chart);
@@ -135,7 +130,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, processedTrades.length, initialBalance, csvTimezone]);
+  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
   
   if (!data) return null;
   
@@ -149,7 +144,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
               Period Returns - {selectedSymbol}
               {drillDownState.level === 'detailed' && drillDownState.selectedPeriod && (
                 <span className="text-sm text-gray-500 ml-2">
-                  ({drillDownState.selectedPeriod.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })})
+                  ({drillDownState.selectedPeriod.label})
                 </span>
               )}
             </h3>

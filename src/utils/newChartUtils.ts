@@ -1,464 +1,751 @@
-import { createChart, ColorType, IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
-import { Trade, DrillDownState } from '../types';
+import { TradeHistoryItem, MarkToMarketItem } from '../types';
+import { createChart, ColorType, LineStyle, CrosshairMode } from 'lightweight-charts';
 
-export interface ChartData {
-  time: UTCTimestamp;
-  value: number;
+// Types for drill-down functionality
+export interface DrillDownState {
+  level: 'monthly' | 'detailed';
+  selectedPeriod?: {
+    year: number;
+    month: number;
+    label: string;
+  };
 }
 
-export interface HistogramData {
-  time: UTCTimestamp;
-  value: number;
-  color?: string;
-}
-
-export interface PeriodReturn {
-  startDate: Date;
-  endDate: Date;
-  returnPercent: number;
-  trades: Trade[];
-}
-
-export function renderBalanceChart(
-  container: HTMLElement,
-  trades: Trade[],
+// Calculate period returns (monthly/daily)
+export const calculatePeriodReturns = (
+  trades: TradeHistoryItem[],
   initialBalance: number,
-  csvTimezone: number
-): IChartApi | null {
-  if (!container || trades.length === 0) return null;
+  timeframe: 'monthly' | 'daily' = 'monthly'
+) => {
+  if (trades.length === 0) return [];
 
+  // Sort trades by time
+  const sortedTrades = [...trades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  
+  // Calculate running balance for each trade
+  let runningBalance = initialBalance;
+  const balanceHistory: { time: Date; balance: number; trade: TradeHistoryItem }[] = [
+    { time: new Date(sortedTrades[0].time), balance: initialBalance, trade: sortedTrades[0] }
+  ];
+
+  for (const trade of sortedTrades) {
+    const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+    const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+    const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+    
+    runningBalance += profit + commission + swap;
+    balanceHistory.push({
+      time: new Date(trade.time),
+      balance: runningBalance,
+      trade: trade
+    });
+  }
+
+  // Group by periods
+  const periods = new Map<string, { 
+    start: number; 
+    end: number; 
+    startDate: Date; 
+    endDate: Date;
+    trades: TradeHistoryItem[];
+  }>();
+  
+  for (const entry of balanceHistory) {
+    let periodKey: string;
+    let periodStart: Date;
+    let periodEnd: Date;
+
+    if (timeframe === 'monthly') {
+      const year = entry.time.getFullYear();
+      const month = entry.time.getMonth();
+      periodKey = `${year}-${String(month + 1).padStart(2, '0')}`;
+      periodStart = new Date(year, month, 1);
+      periodEnd = new Date(year, month + 1, 0, 23, 59, 59);
+    } else {
+      const year = entry.time.getFullYear();
+      const month = entry.time.getMonth();
+      const day = entry.time.getDate();
+      periodKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      periodStart = new Date(year, month, day, 0, 0, 0);
+      periodEnd = new Date(year, month, day, 23, 59, 59);
+    }
+
+    if (!periods.has(periodKey)) {
+      periods.set(periodKey, {
+        start: entry.balance,
+        end: entry.balance,
+        startDate: periodStart,
+        endDate: periodEnd,
+        trades: []
+      });
+    } else {
+      const period = periods.get(periodKey)!;
+      period.end = entry.balance;
+    }
+    
+    // Add trade to period
+    periods.get(periodKey)!.trades.push(entry.trade);
+  }
+
+  // Calculate returns for each period
+  const returns = Array.from(periods.entries()).map(([periodKey, data]) => {
+    const returnPercent = data.start > 0 ? ((data.end - data.start) / data.start) * 100 : 0;
+    
+    return {
+      period: periodKey,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      startBalance: data.start,
+      endBalance: data.end,
+      returnPercent: returnPercent,
+      returnValue: data.end - data.start,
+      trades: data.trades
+    };
+  });
+
+  return returns.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+};
+
+// Calculate detailed returns for a specific month (15-minute intervals)
+export const calculateDetailedReturns = (
+  trades: TradeHistoryItem[],
+  initialBalance: number,
+  year: number,
+  month: number
+) => {
+  if (trades.length === 0) return [];
+
+  // Filter trades for the specific month
+  const monthTrades = trades.filter(trade => {
+    const tradeDate = new Date(trade.time);
+    return tradeDate.getFullYear() === year && tradeDate.getMonth() === month;
+  });
+
+  if (monthTrades.length === 0) return [];
+
+  // Sort trades by time
+  const sortedTrades = [...monthTrades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  
+  // Get the balance at the start of the month
+  const allTradesBeforeMonth = trades.filter(trade => {
+    const tradeDate = new Date(trade.time);
+    return tradeDate < new Date(year, month, 1);
+  }).sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+  let startingBalance = initialBalance;
+  for (const trade of allTradesBeforeMonth) {
+    const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+    const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+    const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+    startingBalance += profit + commission + swap;
+  }
+
+  // Create 15-minute intervals for the entire month
+  const monthStart = new Date(year, month, 1);
+  const monthEnd = new Date(year, month + 1, 0, 23, 59, 59);
+  const intervals: { 
+    start: Date; 
+    end: Date; 
+    trades: TradeHistoryItem[];
+    balance: number;
+  }[] = [];
+
+  let currentTime = new Date(monthStart);
+  let runningBalance = startingBalance;
+
+  while (currentTime <= monthEnd) {
+    const intervalEnd = new Date(currentTime.getTime() + 15 * 60 * 1000); // 15 minutes
+    
+    // Find trades in this interval
+    const intervalTrades = sortedTrades.filter(trade => {
+      const tradeTime = new Date(trade.time);
+      return tradeTime >= currentTime && tradeTime < intervalEnd;
+    });
+
+    // Calculate balance change for this interval
+    let intervalBalance = runningBalance;
+    for (const trade of intervalTrades) {
+      const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+      const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+      const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+      intervalBalance += profit + commission + swap;
+    }
+
+    if (intervalTrades.length > 0 || intervals.length === 0) {
+      intervals.push({
+        start: new Date(currentTime),
+        end: new Date(intervalEnd),
+        trades: intervalTrades,
+        balance: intervalBalance
+      });
+    }
+
+    runningBalance = intervalBalance;
+    currentTime = intervalEnd;
+  }
+
+  // Calculate returns for each interval
+  return intervals.map((interval, index) => {
+    const previousBalance = index === 0 ? startingBalance : intervals[index - 1].balance;
+    const returnPercent = previousBalance > 0 ? ((interval.balance - previousBalance) / previousBalance) * 100 : 0;
+    
+    return {
+      period: `${interval.start.getHours()}:${String(interval.start.getMinutes()).padStart(2, '0')}`,
+      startDate: interval.start,
+      endDate: interval.end,
+      startBalance: previousBalance,
+      endBalance: interval.balance,
+      returnPercent: returnPercent,
+      returnValue: interval.balance - previousBalance,
+      trades: interval.trades
+    };
+  }).filter(item => item.trades.length > 0); // Only show intervals with trades
+};
+
+// Calculate balance history for area chart
+export const calculateBalanceHistory = (
+  trades: TradeHistoryItem[],
+  initialBalance: number
+) => {
+  if (trades.length === 0) return [];
+
+  const sortedTrades = [...trades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  
+  let runningBalance = initialBalance;
+  const balanceMap = new Map<number, number>();
+  
+  // Add initial balance
+  const firstTradeTime = Math.floor(new Date(sortedTrades[0].time).getTime() / 1000);
+  balanceMap.set(firstTradeTime, initialBalance);
+
+  for (const trade of sortedTrades) {
+    const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+    const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+    const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+    
+    runningBalance += profit + commission + swap;
+    
+    const timeInSeconds = Math.floor(new Date(trade.time).getTime() / 1000);
+    balanceMap.set(timeInSeconds, runningBalance);
+  }
+
+  // Convert map to array and sort by time
+  return Array.from(balanceMap.entries())
+    .map(([time, balance]) => ({ time, balance }))
+    .sort((a, b) => a.time - b.time);
+};
+
+// Calculate drawdown history
+export const calculateDrawdownHistory = (
+  trades: TradeHistoryItem[],
+  initialBalance: number
+) => {
+  if (trades.length === 0) return [];
+
+  const sortedTrades = [...trades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+  
+  let runningBalance = initialBalance;
+  let peakBalance = initialBalance;
+  const drawdownMap = new Map<number, number>();
+  
+  // Add initial drawdown
+  const firstTradeTime = Math.floor(new Date(sortedTrades[0].time).getTime() / 1000);
+  drawdownMap.set(firstTradeTime, 0);
+
+  for (const trade of sortedTrades) {
+    const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+    const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+    const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+    
+    runningBalance += profit + commission + swap;
+    
+    // Update peak if current balance is higher
+    if (runningBalance > peakBalance) {
+      peakBalance = runningBalance;
+    }
+    
+    // Calculate drawdown as percentage
+    const drawdownPercent = peakBalance > 0 ? ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
+    
+    const timeInSeconds = Math.floor(new Date(trade.time).getTime() / 1000);
+    drawdownMap.set(timeInSeconds, -drawdownPercent); // Negative for display
+  }
+
+  // Convert map to array and sort by time
+  return Array.from(drawdownMap.entries())
+    .map(([time, drawdown]) => ({ time, drawdown }))
+    .sort((a, b) => a.time - b.time);
+};
+
+// Render period returns chart with drill-down functionality
+export const renderPeriodReturnsChart = (
+  container: HTMLDivElement,
+  trades: TradeHistoryItem[],
+  initialBalance: number,
+  selectedSymbol?: string,
+  drillDownState: DrillDownState = { level: 'monthly' },
+  onDrillDown?: (year: number, month: number, label: string) => void,
+  onDrillUp?: () => void
+): { chart: any; cleanup: () => void } => {
   container.innerHTML = '';
+
+  // Calculate returns based on drill-down state
+  let returns;
+  let titleSuffix = '';
+  
+  if (drillDownState.level === 'monthly') {
+    returns = calculatePeriodReturns(trades, initialBalance, 'monthly');
+    titleSuffix = 'Monthly View';
+  } else if (drillDownState.selectedPeriod) {
+    returns = calculateDetailedReturns(
+      trades, 
+      initialBalance, 
+      drillDownState.selectedPeriod.year, 
+      drillDownState.selectedPeriod.month
+    );
+    titleSuffix = drillDownState.selectedPeriod.label;
+  } else {
+    returns = [];
+  }
+  
+  if (returns.length === 0) {
+    const message = document.createElement('div');
+    message.className = 'flex items-center justify-center h-full text-gray-500';
+    message.textContent = selectedSymbol 
+      ? `No return data available for ${selectedSymbol}`
+      : 'No return data available';
+    container.appendChild(message);
+    return { chart: null, cleanup: () => {} };
+  }
+
+  // Add title and back button
+  const headerContainer = document.createElement('div');
+  headerContainer.className = 'flex items-center justify-between mb-4 px-4';
+  
+  const titleContainer = document.createElement('div');
+  titleContainer.className = 'flex items-center space-x-2';
+  
+  if (drillDownState.level === 'detailed' && onDrillUp) {
+    const backButton = document.createElement('button');
+    backButton.className = 'flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors';
+    backButton.innerHTML = '← Back to Monthly View';
+    backButton.onclick = onDrillUp;
+    titleContainer.appendChild(backButton);
+  }
+  
+  const title = document.createElement('h4');
+  title.className = 'text-sm font-medium text-gray-700';
+  title.textContent = titleSuffix;
+  titleContainer.appendChild(title);
+  
+  headerContainer.appendChild(titleContainer);
+  container.appendChild(headerContainer);
+
+  // Create chart container
+  const chartContainer = document.createElement('div');
+  chartContainer.style.height = 'calc(100% - 60px)';
+  container.appendChild(chartContainer);
+
+  const chart = createChart(chartContainer, {
+    layout: {
+      background: { type: ColorType.Solid, color: 'white' },
+      textColor: '#333',
+    },
+    width: chartContainer.clientWidth,
+    height: chartContainer.clientHeight,
+    rightPriceScale: {
+      borderVisible: false,
+      autoScale: true,
+    },
+    timeScale: {
+      borderVisible: false,
+      timeVisible: true,
+      secondsVisible: false,
+    },
+    grid: {
+      horzLines: {
+        color: '#f3f4f6',
+        style: LineStyle.Dotted,
+      },
+      vertLines: {
+        color: '#f3f4f6',
+        style: LineStyle.Dotted,
+      },
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+    },
+  });
+
+  const histogramSeries = chart.addHistogramSeries({
+    color: '#22c55e',
+    base: 0,
+    priceFormat: {
+      type: 'percent',
+      precision: 2,
+    },
+  });
+
+  const chartData = returns.map(item => ({
+    time: Math.floor(item.startDate.getTime() / 1000),
+    value: item.returnPercent,
+    color: item.returnPercent >= 0 ? '#22c55e' : '#ef4444',
+    originalData: item
+  }));
+
+  histogramSeries.setData(chartData);
+  
+  // Add markers with percentage labels and drill-down buttons
+  const markers = returns.map(item => ({
+    time: Math.floor(item.startDate.getTime() / 1000),
+    position: 'inBar' as const,
+    color: 'transparent',
+    shape: 'circle' as const,
+    size: 0,
+    text: item.returnPercent.toFixed(1)
+  }));
+  
+  histogramSeries.setMarkers(markers);
+
+  // Add click handlers for drill-down (only for monthly view)
+  if (drillDownState.level === 'monthly' && onDrillDown) {
+    chart.subscribeCrosshairMove(param => {
+      if (param.time && param.point) {
+        const dataPoint = chartData.find(d => d.time === param.time);
+        if (dataPoint) {
+          chartContainer.style.cursor = 'pointer';
+          
+          // Show drill-down indicator
+          const indicator = document.getElementById('drill-indicator');
+          if (!indicator) {
+            const newIndicator = document.createElement('div');
+            newIndicator.id = 'drill-indicator';
+            newIndicator.className = 'absolute bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-lg pointer-events-none z-10';
+            newIndicator.textContent = '🔍 Click to drill down';
+            newIndicator.style.left = `${param.point.x + 10}px`;
+            newIndicator.style.top = `${param.point.y - 30}px`;
+            chartContainer.style.position = 'relative';
+            chartContainer.appendChild(newIndicator);
+          }
+        }
+      } else {
+        chartContainer.style.cursor = 'default';
+        const indicator = document.getElementById('drill-indicator');
+        if (indicator) {
+          indicator.remove();
+        }
+      }
+    });
+
+    chart.subscribeClick(param => {
+      if (param.time) {
+        const dataPoint = chartData.find(d => d.time === param.time);
+        if (dataPoint && onDrillDown) {
+          const date = dataPoint.originalData.startDate;
+          const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                            'July', 'August', 'September', 'October', 'November', 'December'];
+          const label = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+          onDrillDown(date.getFullYear(), date.getMonth(), label);
+        }
+      }
+    });
+  }
+
+  // Add tooltip for detailed view showing trade information
+  if (drillDownState.level === 'detailed') {
+    const tooltipContainer = document.createElement('div');
+    tooltipContainer.className = 'absolute hidden bg-gray-900 text-white text-xs rounded py-2 px-3 z-50 max-w-md shadow-lg border border-gray-700';
+    tooltipContainer.style.pointerEvents = 'none';
+    chartContainer.style.position = 'relative';
+    chartContainer.appendChild(tooltipContainer);
+
+    chart.subscribeCrosshairMove(param => {
+      if (param.time && param.point) {
+        const dataPoint = chartData.find(d => d.time === param.time);
+        if (dataPoint && dataPoint.originalData.trades.length > 0) {
+          const trades = dataPoint.originalData.trades;
+          const totalProfit = trades.reduce((sum, trade) => {
+            return sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          }, 0);
+
+          tooltipContainer.innerHTML = `
+            <div class="space-y-2">
+              <div class="font-semibold border-b border-gray-600 pb-1">
+                ${dataPoint.originalData.period} - ${trades.length} Trade${trades.length > 1 ? 's' : ''}
+              </div>
+              <div class="text-xs">
+                <div>Total P/L: <span class="${totalProfit >= 0 ? 'text-green-400' : 'text-red-400'}">${totalProfit.toFixed(2)}</span></div>
+                <div>Return: <span class="${dataPoint.originalData.returnPercent >= 0 ? 'text-green-400' : 'text-red-400'}">${dataPoint.originalData.returnPercent.toFixed(2)}%</span></div>
+              </div>
+              <div class="space-y-1 max-h-32 overflow-y-auto">
+                ${trades.slice(0, 5).map(trade => `
+                  <div class="text-xs border-t border-gray-700 pt-1">
+                    <div>${trade.symbol} ${trade.type} ${trade.volume}</div>
+                    <div class="${parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 ? 'text-green-400' : 'text-red-400'}">
+                      P/L: ${trade.profit}
+                    </div>
+                  </div>
+                `).join('')}
+                ${trades.length > 5 ? `<div class="text-xs text-gray-400 text-center pt-1">... and ${trades.length - 5} more</div>` : ''}
+              </div>
+            </div>
+          `;
+          
+          tooltipContainer.style.display = 'block';
+          tooltipContainer.style.left = `${param.point.x + 10}px`;
+          tooltipContainer.style.top = `${param.point.y - tooltipContainer.offsetHeight - 10}px`;
+        }
+      } else {
+        tooltipContainer.style.display = 'none';
+      }
+    });
+  }
+  
+  // Custom time scale formatting
+  chart.applyOptions({
+    timeScale: {
+      timeVisible: true,
+      tickMarkFormatter: (time: number) => {
+        const date = new Date(time * 1000);
+        if (drillDownState.level === 'monthly') {
+          const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+          return `${monthNames[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
+        } else {
+          return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+        }
+      }
+    }
+  });
+
+  // Add zero line
+  const zeroLineSeries = chart.addLineSeries({
+    color: '#6b7280',
+    lineWidth: 1,
+    lineStyle: LineStyle.Dashed,
+  });
+
+  const zeroLineData = chartData.map(item => ({
+    time: item.time,
+    value: 0
+  }));
+
+  zeroLineSeries.setData(zeroLineData);
+
+  chart.timeScale().fitContent();
+
+  const resizeObserver = new ResizeObserver(entries => {
+    if (entries.length === 0 || entries[0].target !== chartContainer) return;
+    const newRect = entries[0].contentRect;
+    chart.applyOptions({ width: newRect.width, height: newRect.height });
+  });
+
+  resizeObserver.observe(chartContainer);
+
+  return {
+    chart,
+    cleanup: () => {
+      resizeObserver.disconnect();
+      chart.remove();
+      const indicator = document.getElementById('drill-indicator');
+      if (indicator) {
+        indicator.remove();
+      }
+    }
+  };
+};
+
+// Render balance area chart
+export const renderBalanceAreaChart = (
+  container: HTMLDivElement,
+  trades: TradeHistoryItem[],
+  initialBalance: number,
+  selectedSymbol?: string
+): { chart: any; cleanup: () => void } => {
+  container.innerHTML = '';
+
+  const balanceHistory = calculateBalanceHistory(trades, initialBalance);
+  
+  if (balanceHistory.length === 0) {
+    const message = document.createElement('div');
+    message.className = 'flex items-center justify-center h-full text-gray-500';
+    message.textContent = selectedSymbol 
+      ? `No balance data available for ${selectedSymbol}`
+      : 'No balance data available';
+    container.appendChild(message);
+    return { chart: null, cleanup: () => {} };
+  }
 
   const chart = createChart(container, {
     layout: {
-      background: { type: ColorType.Solid, color: 'transparent' },
+      background: { type: ColorType.Solid, color: 'white' },
       textColor: '#333',
     },
     width: container.clientWidth,
-    height: 400,
-    grid: {
-      vertLines: { color: '#e1e5e9' },
-      horzLines: { color: '#e1e5e9' },
-    },
+    height: container.clientHeight,
     rightPriceScale: {
-      borderColor: '#cccccc',
+      borderVisible: false,
+      autoScale: true,
     },
     timeScale: {
-      borderColor: '#cccccc',
+      borderVisible: false,
       timeVisible: true,
       secondsVisible: false,
+    },
+    grid: {
+      horzLines: {
+        color: '#f3f4f6',
+        style: LineStyle.Dotted,
+      },
+      vertLines: {
+        color: '#f3f4f6',
+        style: LineStyle.Dotted,
+      },
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
+    },
+  });
+
+  // Calculate min and max values for gradient positioning
+  const values = balanceHistory.map(item => item.balance);
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+
+  const areaSeries = chart.addAreaSeries({
+    lineColor: '#ef4444', // Red line color
+    topColor: 'rgba(239, 68, 68, 0.8)', // Red at top (80% opacity)
+    bottomColor: 'rgba(34, 197, 94, 0.8)', // Green at bottom (80% opacity)
+    lineWidth: 2,
+    priceFormat: {
+      type: 'price',
+      precision: 2,
+      minMove: 0.01,
+    },
+  });
+
+  const chartData = balanceHistory.map(item => ({
+    time: item.time,
+    value: item.balance
+  }));
+
+  areaSeries.setData(chartData);
+
+  chart.timeScale().fitContent();
+
+  const resizeObserver = new ResizeObserver(entries => {
+    if (entries.length === 0 || entries[0].target !== container) return;
+    const newRect = entries[0].contentRect;
+    chart.applyOptions({ width: newRect.width, height: newRect.height });
+  });
+
+  resizeObserver.observe(container);
+
+  return {
+    chart,
+    cleanup: () => {
+      resizeObserver.disconnect();
+      chart.remove();
+    }
+  };
+};
+
+// Render drawdown chart
+export const renderDrawdownChart = (
+  container: HTMLDivElement,
+  trades: TradeHistoryItem[],
+  initialBalance: number,
+  selectedSymbol?: string
+): { chart: any; cleanup: () => void } => {
+  container.innerHTML = '';
+
+  const drawdownHistory = calculateDrawdownHistory(trades, initialBalance);
+  
+  if (drawdownHistory.length === 0) {
+    const message = document.createElement('div');
+    message.className = 'flex items-center justify-center h-full text-gray-500';
+    message.textContent = selectedSymbol 
+      ? `No drawdown data available for ${selectedSymbol}`
+      : 'No drawdown data available';
+    container.appendChild(message);
+    return { chart: null, cleanup: () => {} };
+  }
+
+  const chart = createChart(container, {
+    layout: {
+      background: { type: ColorType.Solid, color: 'white' },
+      textColor: '#333',
+    },
+    width: container.clientWidth,
+    height: container.clientHeight,
+    rightPriceScale: {
+      borderVisible: false,
+      autoScale: true,
+    },
+    timeScale: {
+      borderVisible: false,
+      timeVisible: true,
+      secondsVisible: false,
+    },
+    grid: {
+      horzLines: {
+        color: '#f3f4f6',
+        style: LineStyle.Dotted,
+      },
+      vertLines: {
+        color: '#f3f4f6',
+        style: LineStyle.Dotted,
+      },
+    },
+    crosshair: {
+      mode: CrosshairMode.Normal,
     },
   });
 
   const lineSeries = chart.addLineSeries({
-    color: '#2563eb',
+    color: '#3b82f6',
     lineWidth: 2,
-  });
-
-  // Calculate running balance
-  let runningBalance = initialBalance;
-  const balanceMap = new Map<number, number>();
-  
-  trades.forEach(trade => {
-    runningBalance += trade.profit;
-    const timestamp = Math.floor(trade.closeTime.getTime() / 1000);
-    balanceMap.set(timestamp, runningBalance);
-  });
-
-  const balanceData: ChartData[] = Array.from(balanceMap.entries())
-    .map(([time, value]) => ({
-      time: time as UTCTimestamp,
-      value,
-    }))
-    .sort((a, b) => a.time - b.time);
-
-  lineSeries.setData(balanceData);
-
-  return chart;
-}
-
-export function renderPeriodReturnsChart(
-  container: HTMLElement,
-  trades: Trade[],
-  timezone: string,
-  drillDownState: DrillDownState,
-  onDrillDown?: (period: Date) => void
-): IChartApi | null {
-  if (!container || trades.length === 0) return null;
-
-  container.innerHTML = '';
-
-  const chart = createChart(container, {
-    layout: {
-      background: { type: ColorType.Solid, color: 'transparent' },
-      textColor: '#333',
-    },
-    width: container.clientWidth,
-    height: 400,
-    grid: {
-      vertLines: { color: '#e1e5e9' },
-      horzLines: { color: '#e1e5e9' },
-    },
-    rightPriceScale: {
-      borderColor: '#cccccc',
-    },
-    timeScale: {
-      borderColor: '#cccccc',
-      timeVisible: true,
-      secondsVisible: false,
+    priceFormat: {
+      type: 'percent',
+      precision: 2,
     },
   });
 
-  // Calculate period returns based on drill-down level
-  const returns = calculatePeriodReturns(trades, drillDownState);
-  
-  const histogramData: HistogramData[] = returns.map(item => ({
-    time: Math.floor(item.startDate.getTime() / 1000) as UTCTimestamp,
-    value: item.returnPercent,
-    color: item.returnPercent >= 0 ? '#22c55e' : '#ef4444',
+  const chartData = drawdownHistory.map(item => ({
+    time: item.time,
+    value: item.drawdown
   }));
 
-  const histogramSeries = chart.addHistogramSeries({
-    color: '#2563eb',
-    priceFormat: {
-      type: 'custom',
-      formatter: (price: number) => `${price.toFixed(1)}`,
-    },
+  lineSeries.setData(chartData);
+
+  // Add zero line
+  const zeroLineSeries = chart.addLineSeries({
+    color: '#6b7280',
+    lineWidth: 1,
+    lineStyle: LineStyle.Dashed,
   });
 
-  histogramSeries.setData(histogramData);
+  const zeroLineData = chartData.map(item => ({
+    time: item.time,
+    value: 0
+  }));
 
-  // Create markers with all information combined
-  const allMarkers = returns.map(item => {
-    const buyTrades = item.trades.filter(trade => trade.type.toLowerCase() === 'buy').length;
-    const sellTrades = item.trades.filter(trade => trade.type.toLowerCase() === 'sell').length;
-    
-    // Base marker with percentage
-    const baseMarker = {
-      time: Math.floor(item.startDate.getTime() / 1000) as UTCTimestamp,
-      position: 'inBar' as const,
-      color: 'transparent',
-      shape: 'circle' as const,
-      size: 0,
-      text: `${item.returnPercent.toFixed(1)}%`
-    };
+  zeroLineSeries.setData(zeroLineData);
 
-    // Additional marker for trade counts in detailed view
-    if (drillDownState.level === 'detailed') {
-      return [
-        baseMarker,
-        {
-          time: Math.floor(item.startDate.getTime() / 1000) as UTCTimestamp,
-          position: 'aboveBar' as const,
-          color: 'transparent',
-          shape: 'circle' as const,
-          size: 0,
-          text: `B:${buyTrades} S:${sellTrades}`
-        }
-      ];
-    }
-    
-    return [baseMarker];
-  }).flat();
+  chart.timeScale().fitContent();
 
-  // Sort markers by time to ensure proper ordering
-  allMarkers.sort((a, b) => a.time - b.time);
-
-  histogramSeries.setMarkers(allMarkers);
-
-  // Add click handler for drill-down in monthly view
-  if (drillDownState.level === 'monthly' && onDrillDown) {
-    chart.subscribeClick((param) => {
-      if (param.time) {
-        const clickedTime = new Date((param.time as number) * 1000);
-        onDrillDown(clickedTime);
-      }
-    });
-  }
-
-  // Add custom tooltip
-  const tooltip = createCustomTooltip(container);
-  
-  chart.subscribeCrosshairMove((param) => {
-    if (param.time) {
-      const time = param.time as number;
-      const periodData = returns.find(item => 
-        Math.floor(item.startDate.getTime() / 1000) === time
-      );
-      
-      if (periodData) {
-        showTooltip(tooltip, param, periodData, drillDownState.level);
-      } else {
-        hideTooltip(tooltip);
-      }
-    } else {
-      hideTooltip(tooltip);
-    }
+  const resizeObserver = new ResizeObserver(entries => {
+    if (entries.length === 0 || entries[0].target !== container) return;
+    const newRect = entries[0].contentRect;
+    chart.applyOptions({ width: newRect.width, height: newRect.height });
   });
 
-  return chart;
-}
+  resizeObserver.observe(container);
 
-function calculatePeriodReturns(trades: Trade[], drillDownState: DrillDownState): PeriodReturn[] {
-  if (trades.length === 0) return [];
-
-  const sortedTrades = [...trades].sort((a, b) => a.closeTime.getTime() - b.closeTime.getTime());
-  
-  if (drillDownState.level === 'monthly') {
-    // Group by month
-    const monthlyGroups = new Map<string, Trade[]>();
-    
-    sortedTrades.forEach(trade => {
-      const monthKey = `${trade.closeTime.getFullYear()}-${trade.closeTime.getMonth()}`;
-      if (!monthlyGroups.has(monthKey)) {
-        monthlyGroups.set(monthKey, []);
-      }
-      monthlyGroups.get(monthKey)!.push(trade);
-    });
-
-    return Array.from(monthlyGroups.entries()).map(([monthKey, monthTrades]) => {
-      const [year, month] = monthKey.split('-').map(Number);
-      const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 0);
-      const totalProfit = monthTrades.reduce((sum, trade) => sum + trade.profit, 0);
-      
-      return {
-        startDate,
-        endDate,
-        returnPercent: totalProfit,
-        trades: monthTrades,
-      };
-    });
-  } else {
-    // Detailed view: group by 15-minute intervals for the selected month
-    const selectedMonth = drillDownState.selectedPeriod;
-    if (!selectedMonth) return [];
-
-    const monthStart = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth(), 1);
-    const monthEnd = new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 0);
-    
-    const monthTrades = sortedTrades.filter(trade => 
-      trade.closeTime >= monthStart && trade.closeTime <= monthEnd
-    );
-
-    // Group by 15-minute intervals
-    const intervalGroups = new Map<number, Trade[]>();
-    
-    monthTrades.forEach(trade => {
-      const time = trade.closeTime.getTime();
-      const intervalStart = Math.floor(time / (15 * 60 * 1000)) * (15 * 60 * 1000);
-      
-      if (!intervalGroups.has(intervalStart)) {
-        intervalGroups.set(intervalStart, []);
-      }
-      intervalGroups.get(intervalStart)!.push(trade);
-    });
-
-    return Array.from(intervalGroups.entries()).map(([intervalStart, intervalTrades]) => {
-      const startDate = new Date(intervalStart);
-      const endDate = new Date(intervalStart + 15 * 60 * 1000);
-      const totalProfit = intervalTrades.reduce((sum, trade) => sum + trade.profit, 0);
-      
-      return {
-        startDate,
-        endDate,
-        returnPercent: totalProfit,
-        trades: intervalTrades,
-      };
-    });
-  }
-}
-
-function createCustomTooltip(container: HTMLElement): HTMLElement {
-  const tooltip = document.createElement('div');
-  tooltip.style.cssText = `
-    position: absolute;
-    display: none;
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #ccc;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    font-size: 12px;
-    z-index: 1000;
-    max-width: 32rem;
-    max-height: 12rem;
-    overflow-y: auto;
-    pointer-events: auto;
-    backdrop-filter: blur(4px);
-  `;
-  
-  // Add close button
-  const closeButton = document.createElement('button');
-  closeButton.innerHTML = '×';
-  closeButton.style.cssText = `
-    position: absolute;
-    top: 4px;
-    right: 8px;
-    background: none;
-    border: none;
-    font-size: 16px;
-    cursor: pointer;
-    color: #666;
-    padding: 0;
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  `;
-  
-  closeButton.addEventListener('click', () => {
-    tooltip.style.display = 'none';
-  });
-  
-  tooltip.appendChild(closeButton);
-  container.appendChild(tooltip);
-  
-  return tooltip;
-}
-
-function showTooltip(tooltip: HTMLElement, param: any, periodData: PeriodReturn, level: string): void {
-  const buyTrades = periodData.trades.filter(trade => trade.type.toLowerCase() === 'buy');
-  const sellTrades = periodData.trades.filter(trade => trade.type.toLowerCase() === 'sell');
-  
-  const formatDate = (date: Date) => {
-    if (level === 'monthly') {
-      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-    } else {
-      return date.toLocaleString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        hour: '2-digit', 
-        minute: '2-digit' 
-      });
+  return {
+    chart,
+    cleanup: () => {
+      resizeObserver.disconnect();
+      chart.remove();
     }
   };
-
-  tooltip.innerHTML = `
-    <button style="position: absolute; top: 4px; right: 8px; background: none; border: none; font-size: 16px; cursor: pointer; color: #666;">×</button>
-    <div style="margin-bottom: 8px; font-weight: bold;">
-      ${formatDate(periodData.startDate)}
-    </div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-      <div>Total Trades: ${periodData.trades.length}</div>
-      <div>P/L: <span style="color: ${periodData.returnPercent >= 0 ? '#22c55e' : '#ef4444'}">${periodData.returnPercent.toFixed(2)}</span></div>
-      <div style="color: #22c55e;">Buy: ${buyTrades.length}</div>
-      <div style="color: #ef4444;">Sell: ${sellTrades.length}</div>
-    </div>
-    <div style="border-top: 1px solid #eee; padding-top: 8px;">
-      <div style="font-weight: bold; margin-bottom: 4px;">Trades:</div>
-      <div style="max-height: 120px; overflow-y: auto;">
-        ${periodData.trades.map(trade => `
-          <div style="margin-bottom: 4px; padding: 4px; background: #f9f9f9; border-radius: 4px; font-size: 11px;">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-              <div><strong>${trade.symbol}</strong></div>
-              <div style="color: ${trade.type.toLowerCase() === 'buy' ? '#22c55e' : '#ef4444'};">${trade.type}</div>
-              <div>Vol: ${trade.volume}</div>
-              <div>P/L: <span style="color: ${trade.profit >= 0 ? '#22c55e' : '#ef4444'}">${trade.profit.toFixed(2)}</span></div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-  `;
-
-  // Re-add close button event listener
-  const closeBtn = tooltip.querySelector('button');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', () => {
-      tooltip.style.display = 'none';
-    });
-  }
-
-  // Position tooltip
-  const containerRect = tooltip.parentElement!.getBoundingClientRect();
-  const tooltipRect = tooltip.getBoundingClientRect();
-  
-  let left = param.point?.x || 0;
-  let top = (param.point?.y || 0) - 10;
-  
-  // Adjust if tooltip would go outside container
-  if (left + tooltipRect.width > containerRect.width) {
-    left = containerRect.width - tooltipRect.width - 10;
-  }
-  if (top < 0) {
-    top = 10;
-  }
-  
-  tooltip.style.left = `${left}px`;
-  tooltip.style.top = `${top}px`;
-  tooltip.style.display = 'block';
-}
-
-function hideTooltip(tooltip: HTMLElement): void {
-  // Add a small delay to allow moving to tooltip
-  setTimeout(() => {
-    if (!tooltip.matches(':hover')) {
-      tooltip.style.display = 'none';
-    }
-  }, 100);
-}
-
-export function renderDrawdownChart(
-  container: HTMLElement,
-  trades: Trade[],
-  initialBalance: number,
-  csvTimezone: number
-): IChartApi | null {
-  if (!container || trades.length === 0) return null;
-
-  container.innerHTML = '';
-
-  const chart = createChart(container, {
-    layout: {
-      background: { type: ColorType.Solid, color: 'transparent' },
-      textColor: '#333',
-    },
-    width: container.clientWidth,
-    height: 400,
-    grid: {
-      vertLines: { color: '#e1e5e9' },
-      horzLines: { color: '#e1e5e9' },
-    },
-    rightPriceScale: {
-      borderColor: '#cccccc',
-    },
-    timeScale: {
-      borderColor: '#cccccc',
-      timeVisible: true,
-      secondsVisible: false,
-    },
-  });
-
-  const areaSeries = chart.addAreaSeries({
-    topColor: 'rgba(239, 68, 68, 0.4)',
-    bottomColor: 'rgba(239, 68, 68, 0.1)',
-    lineColor: '#ef4444',
-    lineWidth: 2,
-  });
-
-  // Calculate drawdown
-  let runningBalance = initialBalance;
-  let peak = initialBalance;
-  const drawdownMap = new Map<number, number>();
-  
-  trades.forEach(trade => {
-    runningBalance += trade.profit;
-    peak = Math.max(peak, runningBalance);
-    const drawdown = runningBalance - peak;
-    const timestamp = Math.floor(trade.closeTime.getTime() / 1000);
-    drawdownMap.set(timestamp, drawdown);
-  });
-    
-  const drawdownData: ChartData[] = Array.from(drawdownMap.entries())
-    .map(([time, value]) => ({
-      time: time as UTCTimestamp,
-      value,
-    }))
-    .sort((a, b) => a.time - b.time);
-
-  areaSeries.setData(drawdownData);
-
-  return chart;
-}
+};

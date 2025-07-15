@@ -69,16 +69,3 @@ export interface WeekRange {
   end: string;
   label: string;
 }
-
-export interface Trade {
-  closeTime: Date;
-  profit: number;
-  type: string;
-  symbol: string;
-  volume: number;
-}
-
-export interface DrillDownState {
-  level: 'monthly' | 'detailed';
-  selectedPeriod?: Date;
-}
