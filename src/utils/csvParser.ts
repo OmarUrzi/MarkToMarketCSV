@@ -493,8 +493,8 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
           // Long position: profit when market price > entry price
           pnl = (finalMarketPrice - trade.openPrice) * trade.volume * 100;
         } else {
-          // Short position: profit when market price < entry price
-          pnl = (trade.openPrice - finalMarketPrice) * trade.volume * 100;
+        ? (marketPrice - trade.entryPrice) * trade.volume * 100000
+        : (trade.entryPrice - marketPrice) * trade.volume * 100000;
         }
       }
       openPnL += pnl;
