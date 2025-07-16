@@ -614,7 +614,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
           : '0.00';
 
         // Calculate max drawdown (simplified)
-        let maxDrawdown = 0;
+        let simplifiedMaxDrawdown = 0;
         let peak = 10000;
         let currentBalance = 10000;
 
@@ -624,31 +624,42 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
             peak = currentBalance;
           }
           const drawdown = ((peak - currentBalance) / peak) * 100;
-          if (drawdown > maxDrawdown) {
-            maxDrawdown = drawdown;
+          if (drawdown > simplifiedMaxDrawdown) {
+            simplifiedMaxDrawdown = drawdown;
           }
         }
 
         // Generate mark-to-market data using the complete trades and API calls
         console.log('Generating mark-to-market data with API calls using entry times...');
         
-        // Reset max drawdown tracker
-        generateMarkToMarketData.maxDrawdown = 0;
-        
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
+
+        // Calculate final max drawdown
+        let finalMaxDrawdown = simplifiedMaxDrawdown;
+        
+        // If we have mark-to-market data, calculate more accurate max drawdown
+        if (markToMarketData && markToMarketData.length > 0) {
+          const drawdownValues = markToMarketData
+            .map(item => parseFloat(item.currentDrawdown?.replace('%', '') || '0'))
+            .filter(value => !isNaN(value));
+          
+          if (drawdownValues.length > 0) {
+            finalMaxDrawdown = Math.max(...drawdownValues);
+          }
+        }
 
         const backtestData: BacktestData = {
           currencyPair: mainSymbol,
           totalTrades: mainSymbolTrades.length,
           totalProfit: totalProfit.toFixed(2),
           winRate: winRate,
-          maxDrawdown: maxDrawdown.toFixed(2),
+          maxDrawdown: finalMaxDrawdown.toFixed(2),
           tradeHistory: tradeHistory,
           markToMarketData: markToMarketData,
           availableSymbols: availableSymbols,
           initialBalance: customInitialBalance
         };
-
+        
         console.log('Backtest data summary:', {
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
