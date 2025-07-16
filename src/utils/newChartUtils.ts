@@ -491,6 +491,16 @@ export const renderPeriodReturnsChart = (
   // Update markers when user zooms or pans
   chart.timeScale().subscribeVisibleTimeRangeChange(updateMarkers);
   
+  // Initialize cleanup function
+  let cleanupFn = () => {
+    resizeObserver.disconnect();
+    chart.remove();
+    const indicator = document.getElementById('drill-indicator');
+    if (indicator) {
+      indicator.remove();
+    }
+  };
+  
   // For monthly view, also add percentage labels as overlay text
   if (drillDownState.level === 'monthly') {
     // Create overlay for percentage labels
@@ -541,10 +551,10 @@ export const renderPeriodReturnsChart = (
     // Update labels when chart is resized or scrolled
     chart.timeScale().subscribeVisibleTimeRangeChange(updatePercentageLabels);
     
-    // Store cleanup function for percentage overlay
-    const originalCleanup = cleanup;
-    cleanup = () => {
-      if (originalCleanup) originalCleanup();
+    // Update cleanup function to include percentage overlay removal
+    const originalCleanup = cleanupFn;
+    cleanupFn = () => {
+      originalCleanup();
       if (percentageOverlay.parentNode) {
         percentageOverlay.parentNode.removeChild(percentageOverlay);
       }
@@ -833,14 +843,7 @@ export const renderPeriodReturnsChart = (
 
   return {
     chart,
-    cleanup: () => {
-      resizeObserver.disconnect();
-      chart.remove();
-      const indicator = document.getElementById('drill-indicator');
-      if (indicator) {
-        indicator.remove();
-      }
-    }
+    cleanup: cleanupFn
   };
 };
 
