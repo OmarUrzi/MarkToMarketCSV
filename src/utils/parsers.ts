@@ -110,8 +110,8 @@ const calculateMarkToMarket = (
   // Calculate P/L for each open trade
   const tradesWithPnL = openTrades.map(trade => {
     const pnl = trade.type === 'buy'
-      ? (marketPrice - trade.entryPrice) * trade.volume * 100
-      : (trade.entryPrice - marketPrice) * trade.volume * 100;
+      ? (marketPrice - trade.entryPrice) * trade.volume * 100000
+      : (trade.entryPrice - marketPrice) * trade.volume * 100000;
     
     totalVolume += trade.type === 'buy' ? trade.volume : -trade.volume;
     openPnL += pnl;
