@@ -222,14 +222,9 @@ const parseMarketData = (data: string, trades: TradeHistoryItem[], initialBalanc
       console.log(`First filtered point:`, filteredMarketData[0]?.time);
     }
     
-    const markToMarketData = filteredMarketData.map(point => 
-      calculateMarkToMarket(trades, point.time, point.close, initialBalance, selectedSymbol, csvTimezone, maxDrawdownTracker)
+    return filteredMarketData.map(point => 
+      calculateMarkToMarket(trades, point.time, point.close, initialBalance, selectedSymbol, csvTimezone)
     );
-    
-    // Store the maximum drawdown for later use
-    parseMarketData.maxDrawdown = maxDrawdownTracker.value;
-    
-    return markToMarketData;
   } catch (error) {
     console.error('Error parsing market data:', error);
     return [];
@@ -662,6 +657,9 @@ export const fetchMarkToMarketForSymbol = async (
   }
 
   try {
+    // Reset peak balance for new calculation
+    calculateMarkToMarket.peakBalance = initialBalance;
+    
     const fromDate = new Date(firstTrade.time);
     const toDate = new Date(lastTrade.time);
 

@@ -631,23 +631,31 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
 
         // Generate mark-to-market data using the complete trades and API calls
         console.log('Generating mark-to-market data with API calls using entry times...');
+        
+        // Reset max drawdown tracker
+        generateMarkToMarketData.maxDrawdown = 0;
+        
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
 
         const backtestData: BacktestData = {
-          currencyPair: mainSymbol,
-          expertName: 'CSV Import',
-          totalProfit: `$${totalProfit.toFixed(2)}`,
-          winRate: `${winRate}%`,
-          totalTrades: mainSymbolTrades.length.toString(),
-          maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
-          initialBalance: customInitialBalance,
-          tradeHistory,
-          markToMarketData,
-          chartData: [],
-          availableSymbols
-        };
+        let maxDrawdown = generateMarkToMarketData.maxDrawdown || 0;
+        
+        // Fallback calculation if no mark-to-market data
+        if (maxDrawdown === 0) {
+          let peak = customInitialBalance;
+          let currentBalance = customInitialBalance;
 
-        console.log('Final backtest data:', {
+          for (const trade of tradeHistory) {
+            currentBalance = parseFloat(trade.balance);
+            if (currentBalance > peak) {
+              peak = currentBalance;
+            }
+            const drawdown = ((peak - currentBalance) / peak) * 100;
+            if (drawdown > maxDrawdown) {
+              maxDrawdown = drawdown;
+            }
+          }
+        }
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
           totalProfit: backtestData.totalProfit,
