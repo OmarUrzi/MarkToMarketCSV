@@ -235,8 +235,62 @@ export const calculateBalanceHistory = (
     .sort((a, b) => a.time - b.time);
 };
 
-// Calculate drawdown history
+// Calculate drawdown history using real-time mark-to-market data
 export const calculateDrawdownHistory = (
+  trades: TradeHistoryItem[],
+  initialBalance: number,
+  markToMarketData?: MarkToMarketItem[]
+) => {
+  // If we have mark-to-market data, use it for real-time drawdown calculation
+  if (markToMarketData && markToMarketData.length > 0) {
+    return calculateRealTimeDrawdown(markToMarketData, initialBalance);
+  }
+  
+  // Fallback to old method if no mark-to-market data
+  return calculateClosedTradesDrawdown(trades, initialBalance);
+};
+
+// New function: Calculate drawdown using real-time mark-to-market data
+const calculateRealTimeDrawdown = (
+  markToMarketData: MarkToMarketItem[],
+  initialBalance: number
+) => {
+  if (markToMarketData.length === 0) return [];
+
+  let peakBalance = initialBalance;
+  const drawdownMap = new Map<number, number>();
+  
+  // Sort mark-to-market data by time
+  const sortedData = [...markToMarketData].sort((a, b) => 
+    new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+
+  for (const item of sortedData) {
+    // Calculate real-time balance: initial + closed P&L + open P&L
+    const closedPnL = parseFloat(item.closed.replace(/[^\d.-]/g, '') || '0');
+    const openPnL = parseFloat(item.open.replace(/[^\d.-]/g, '') || '0');
+    const currentBalance = initialBalance + closedPnL + openPnL;
+    
+    // Update peak if current balance is higher
+    if (currentBalance > peakBalance) {
+      peakBalance = currentBalance;
+    }
+    
+    // Calculate drawdown as percentage from peak
+    const drawdownPercent = peakBalance > 0 ? 
+      ((peakBalance - currentBalance) / peakBalance) * 100 : 0;
+    
+    const timeInSeconds = Math.floor(new Date(item.date).getTime() / 1000);
+    drawdownMap.set(timeInSeconds, -drawdownPercent); // Negative for display
+  }
+
+  return Array.from(drawdownMap.entries())
+    .map(([time, drawdown]) => ({ time, drawdown }))
+    .sort((a, b) => a.time - b.time);
+};
+
+// Original function: Calculate drawdown based only on closed trades (fallback)
+const calculateClosedTradesDrawdown = (
   trades: TradeHistoryItem[],
   initialBalance: number
 ) => {
@@ -245,14 +299,15 @@ export const calculateDrawdownHistory = (
   const sortedTrades = [...trades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
   
   let runningBalance = initialBalance;
-  let peakBalance = initialBalance;
+  let peakBalance = initialBalance;  
   const drawdownMap = new Map<number, number>();
   
   // Add initial drawdown
   const firstTradeTime = Math.floor(new Date(sortedTrades[0].time).getTime() / 1000);
-  drawdownMap.set(firstTradeTime, 0);
+  drawdownMap.set(firstTradeTime, 0);  
 
   for (const trade of sortedTrades) {
+    // Calculate new balance
     const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
     const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
     const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
@@ -265,13 +320,13 @@ export const calculateDrawdownHistory = (
     }
     
     // Calculate drawdown as percentage
-    const drawdownPercent = peakBalance > 0 ? ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
+    const drawdownPercent = peakBalance > 0 ? 
+      ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
     
     const timeInSeconds = Math.floor(new Date(trade.time).getTime() / 1000);
     drawdownMap.set(timeInSeconds, -drawdownPercent); // Negative for display
   }
 
-  // Convert map to array and sort by time
   return Array.from(drawdownMap.entries())
     .map(([time, drawdown]) => ({ time, drawdown }))
     .sort((a, b) => a.time - b.time);
@@ -805,11 +860,12 @@ export const renderDrawdownChart = (
   container: HTMLDivElement,
   trades: TradeHistoryItem[],
   initialBalance: number,
-  selectedSymbol?: string
+  selectedSymbol?: string,
+  markToMarketData?: MarkToMarketItem[]
 ): { chart: any; cleanup: () => void } => {
   container.innerHTML = '';
 
-  const drawdownHistory = calculateDrawdownHistory(trades, initialBalance);
+  const drawdownHistory = calculateDrawdownHistory(trades, initialBalance, markToMarketData);
   
   if (drawdownHistory.length === 0) {
     const message = document.createElement('div');

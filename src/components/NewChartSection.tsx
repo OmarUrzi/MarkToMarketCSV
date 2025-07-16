@@ -112,7 +112,8 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         drawdownChartRef.current,
         symbolTrades,
         initialBalance,
-        selectedSymbol
+        selectedSymbol,
+        data?.markToMarketData // Pass mark-to-market data for real-time drawdown
       );
       
       setDrawdownChartInstance(chart);
@@ -130,7 +131,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         </div>
       `;
     }
-  }, [data, selectedSymbol, symbolTrades.length, initialBalance]);
+  }, [data, selectedSymbol, symbolTrades.length, initialBalance, data?.markToMarketData?.length]);
   
   if (!data) return null;
   
