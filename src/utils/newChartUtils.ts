@@ -467,15 +467,15 @@ export const renderPeriodReturnsChart = (
       const visibleBars = visibleRange.to - visibleRange.from;
       const pixelsPerBar = containerWidth / visibleBars;
       
-      // Only show percentage markers when zoomed in enough
-      if (pixelsPerBar >= 40) {
+      // Show percentage markers for monthly view or when zoomed in enough
+      if (drillDownState.level === 'monthly' || pixelsPerBar >= 40) {
         const markers = returns.map(item => ({
           time: Math.floor(item.startDate.getTime() / 1000),
           position: 'inBar' as const,
           color: 'transparent',
           shape: 'circle' as const,
           size: 0,
-          text: item.returnPercent.toFixed(1)
+          text: `${item.returnPercent.toFixed(1)}%`
         }));
         histogramSeries.setMarkers(markers);
       } else {
@@ -717,7 +717,31 @@ export const renderPeriodReturnsChart = (
           const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
           return `${monthNames[date.getMonth()]} ${String(date.getFullYear()).slice(-2)}`;
         } else {
-          return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+          // For detailed view, show day and time for better context
+          const day = String(date.getDate()).padStart(2, '0');
+          const hours = String(date.getHours()).padStart(2, '0');
+          const minutes = String(date.getMinutes()).padStart(2, '0');
+          
+          // Check the range to decide format
+          const timeScale = chart.timeScale();
+          const visibleRange = timeScale.getVisibleLogicalRange();
+          
+          if (visibleRange) {
+            const containerWidth = chartContainer.clientWidth;
+            const visibleBars = visibleRange.to - visibleRange.from;
+            const pixelsPerBar = containerWidth / visibleBars;
+            
+            // If showing many bars (zoomed out), show day/date
+            if (pixelsPerBar < 30) {
+              return `${day}`;
+            } else if (pixelsPerBar < 60) {
+              return `${day} ${hours}:00`;
+            } else {
+              return `${hours}:${minutes}`;
+            }
+          }
+          
+          return `${day} ${hours}:${minutes}`;
         }
       }
     }
