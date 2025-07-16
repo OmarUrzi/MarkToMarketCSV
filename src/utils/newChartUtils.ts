@@ -457,7 +457,7 @@ export const renderPeriodReturnsChart = (
 
   histogramSeries.setData(chartData);
   
-  // Add markers with percentage labels only when zoomed in enough
+  // Add markers with percentage labels
   const updateMarkers = () => {
     const timeScale = chart.timeScale();
     const visibleRange = timeScale.getVisibleLogicalRange();
@@ -467,7 +467,7 @@ export const renderPeriodReturnsChart = (
       const visibleBars = visibleRange.to - visibleRange.from;
       const pixelsPerBar = containerWidth / visibleBars;
       
-      // Show percentage markers for monthly view or when zoomed in enough
+      // Always show percentage markers for monthly view, or when zoomed in enough for detailed view
       if (drillDownState.level === 'monthly' || pixelsPerBar >= 40) {
         const markers = returns.map(item => ({
           time: Math.floor(item.startDate.getTime() / 1000),
@@ -475,7 +475,7 @@ export const renderPeriodReturnsChart = (
           color: 'transparent',
           shape: 'circle' as const,
           size: 0,
-          text: `${item.returnPercent.toFixed(1)}%`
+          text: `${item.returnPercent >= 0 ? '+' : ''}${item.returnPercent.toFixed(1)}%`
         }));
         histogramSeries.setMarkers(markers);
       } else {
@@ -490,6 +490,66 @@ export const renderPeriodReturnsChart = (
   
   // Update markers when user zooms or pans
   chart.timeScale().subscribeVisibleTimeRangeChange(updateMarkers);
+  
+  // For monthly view, also add percentage labels as overlay text
+  if (drillDownState.level === 'monthly') {
+    // Create overlay for percentage labels
+    const percentageOverlay = document.createElement('div');
+    percentageOverlay.className = 'absolute inset-0 pointer-events-none';
+    percentageOverlay.style.zIndex = '15';
+    chartContainer.appendChild(percentageOverlay);
+
+    // Function to update percentage labels
+    const updatePercentageLabels = () => {
+      percentageOverlay.innerHTML = '';
+      
+      const timeScale = chart.timeScale();
+      
+      chartData.forEach(dataPoint => {
+        const coordinate = timeScale.timeToCoordinate(dataPoint.time);
+        const priceCoordinate = histogramSeries.priceToCoordinate(dataPoint.value);
+        
+        if (coordinate !== null && priceCoordinate !== null) {
+          // Create percentage label above the bar
+          const percentLabel = document.createElement('div');
+          percentLabel.className = 'absolute text-xs font-bold text-gray-800 pointer-events-none text-center';
+          percentLabel.style.left = `${coordinate - 25}px`;
+          percentLabel.style.width = '50px';
+          
+          // Position above positive bars, below negative bars
+          if (dataPoint.value >= 0) {
+            percentLabel.style.top = `${Math.max(priceCoordinate - 25, 5)}px`;
+          } else {
+            percentLabel.style.top = `${Math.min(priceCoordinate + 10, chartContainer.clientHeight - 20)}px`;
+          }
+          
+          // Format percentage with + for positive values
+          const formattedPercent = `${dataPoint.value >= 0 ? '+' : ''}${dataPoint.value.toFixed(1)}%`;
+          percentLabel.textContent = formattedPercent;
+          
+          // Color based on positive/negative
+          percentLabel.style.color = dataPoint.value >= 0 ? '#059669' : '#dc2626';
+          
+          percentageOverlay.appendChild(percentLabel);
+        }
+      });
+    };
+
+    // Initial label update
+    updatePercentageLabels();
+
+    // Update labels when chart is resized or scrolled
+    chart.timeScale().subscribeVisibleTimeRangeChange(updatePercentageLabels);
+    
+    // Store cleanup function for percentage overlay
+    const originalCleanup = cleanup;
+    cleanup = () => {
+      if (originalCleanup) originalCleanup();
+      if (percentageOverlay.parentNode) {
+        percentageOverlay.parentNode.removeChild(percentageOverlay);
+      }
+    };
+  }
 
   // Add click handlers for drill-down (only for monthly view)
   if (drillDownState.level === 'monthly' && onDrillDown) {
