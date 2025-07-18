@@ -491,7 +491,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
       if (finalMarketPrice > 0) {
         if (trade.type === 'buy') {
           // Long position: profit when market price > entry price
-          pnl = (finalMarketPrice - trade.openPrice) * trade.volume * 100;
+          pnl = (finalMarketPrice - trade.openPrice) * trade.volume * 100000;
         } else {
           // Short position: profit when market price < entry price
           pnl = (trade.openPrice - finalMarketPrice) * trade.volume * 100000;
