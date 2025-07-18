@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BacktestData } from '../types';
+import { DrawdownCalculator } from './DrawdownCalculator';
 import { 
   renderPeriodReturnsChart, 
   renderBalanceAreaChart, 
@@ -218,6 +219,15 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         <div className="p-4 h-[400px]">
           <div ref={drawdownChartRef} className="w-full h-full"></div>
         </div>
+      </div>
+
+      {/* Drawdown Calculator */}
+      <div className="bg-white rounded-lg shadow">
+        <DrawdownCalculator 
+          markToMarketData={data?.markToMarketData || []}
+          initialBalance={initialBalance}
+          selectedSymbol={selectedSymbol}
+        />
       </div>
     </div>
   );
