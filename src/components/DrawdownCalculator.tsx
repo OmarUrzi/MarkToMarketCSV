@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { Calculator, TrendingDown, Filter, BarChart3 } from 'lucide-react';
-import { MarkToMarketItem } from '../types';
-import { formatCurrency, formatPercentage } from '../utils/numberFormatter';
+import { Calculator, TrendingDown, ChevronDown, ChevronRight, Minus } from 'lucide-react';
+import { TradeHistoryItem } from '../types';
+import { formatCurrency, formatPercentage, formatVolume } from '../utils/numberFormatter';
 
 interface DrawdownCalculatorProps {
-  markToMarketData: MarkToMarketItem[];
+  trades: TradeHistoryItem[];
   initialBalance: number;
   selectedSymbol?: string;
 }
@@ -19,7 +19,7 @@ interface DrawdownEvent {
   duration: number; // in hours
   recoveryDate?: string;
   recoveryDuration?: number; // in hours
-  triggerTrades: any[];
+  triggerTrades: TradeHistoryItem[];
   tradeTypes: {
     buyCount: number;
     sellCount: number;
@@ -28,7 +28,7 @@ interface DrawdownEvent {
 }
 
 export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
-  markToMarketData,
+  trades,
   initialBalance,
   selectedSymbol
 }) => {
@@ -38,74 +38,87 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
   const [maxAmount, setMaxAmount] = useState<number>(0);
   const [sortBy, setSortBy] = useState<'percent' | 'amount' | 'duration' | 'date'>('percent');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
 
-  // Calculate drawdown events
+  // Calculate drawdown events based on CSV trades
   const drawdownEvents = useMemo(() => {
-    if (!markToMarketData || markToMarketData.length === 0) return [];
+    if (!trades || trades.length === 0) return [];
 
     const events: DrawdownEvent[] = [];
     let peakBalance = initialBalance;
     let peakDate = '';
     let inDrawdown = false;
     let drawdownStart = '';
+    let drawdownTrades: TradeHistoryItem[] = [];
 
-    // Sort data by date
-    const sortedData = [...markToMarketData].sort((a, b) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
+    // Sort trades by time and calculate running balance
+    const sortedTrades = [...trades]
+      .filter(trade => parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0)
+      .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
 
-    for (let i = 0; i < sortedData.length; i++) {
-      const item = sortedData[i];
+    let runningBalance = initialBalance;
+
+    for (let i = 0; i < sortedTrades.length; i++) {
+      const trade = sortedTrades[i];
       
-      // Calculate current balance (closed + open P&L)
-      const closedPnL = parseFloat(item.closed.replace(/[^\d.-]/g, '') || '0');
-      const openPnL = parseFloat(item.open.replace(/[^\d.-]/g, '') || '0');
-      const currentBalance = initialBalance + closedPnL + openPnL;
+      // Calculate new balance after this trade
+      const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+      const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+      const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+      
+      runningBalance += profit + commission + swap;
 
       // Update peak if current balance is higher
-      if (currentBalance > peakBalance) {
-        peakBalance = currentBalance;
-        peakDate = item.date;
+      if (runningBalance > peakBalance) {
+        peakBalance = runningBalance;
+        peakDate = trade.time;
         
         // If we were in drawdown and recovered, end the drawdown event
         if (inDrawdown) {
           const lastEvent = events[events.length - 1];
           if (lastEvent) {
-            lastEvent.recoveryDate = item.date;
+            lastEvent.recoveryDate = trade.time;
             lastEvent.recoveryDuration = 
-              (new Date(item.date).getTime() - new Date(lastEvent.endDate).getTime()) / (1000 * 60 * 60);
+              (new Date(trade.time).getTime() - new Date(lastEvent.endDate).getTime()) / (1000 * 60 * 60);
           }
           inDrawdown = false;
+          drawdownTrades = [];
         }
       }
 
       // Calculate current drawdown
       const drawdownPercent = peakBalance > 0 ? 
-        ((peakBalance - currentBalance) / peakBalance) * 100 : 0;
-      const drawdownAmount = peakBalance - currentBalance;
+        ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
+      const drawdownAmount = peakBalance - runningBalance;
 
       // Check if we hit the threshold
       if (drawdownPercent >= thresholdPercent && !inDrawdown) {
         inDrawdown = true;
-        drawdownStart = item.date;
+        drawdownStart = trade.time;
+        drawdownTrades = [];
       }
 
-      // If in drawdown, update the current event or create new one
+      // If in drawdown, collect trades
+      if (inDrawdown) {
+        drawdownTrades.push(trade);
+      }
+
+      // If in drawdown and this is a new maximum drawdown, update or create event
       if (inDrawdown && drawdownPercent >= thresholdPercent) {
         const existingEventIndex = events.findIndex(event => 
           event.startDate === drawdownStart && !event.recoveryDate
         );
 
-        // Get trades that might have triggered this drawdown
-        const triggerTrades = (item.trades || []).filter(trade => {
+        // Filter trades based on filter type
+        const filteredTriggerTrades = drawdownTrades.filter(t => {
           if (filterType === 'all') return true;
-          return trade.type.toLowerCase() === filterType;
+          return t.type.toLowerCase() === filterType;
         });
 
         // Calculate trade statistics
-        const buyTrades = triggerTrades.filter(t => t.type.toLowerCase() === 'buy');
-        const sellTrades = triggerTrades.filter(t => t.type.toLowerCase() === 'sell');
-        const totalVolume = triggerTrades.reduce((sum, t) => sum + (t.volume || 0), 0);
+        const buyTrades = filteredTriggerTrades.filter(t => t.type.toLowerCase() === 'buy');
+        const sellTrades = filteredTriggerTrades.filter(t => t.type.toLowerCase() === 'sell');
+        const totalVolume = filteredTriggerTrades.reduce((sum, t) => sum + parseFloat(t.volume || '0'), 0);
 
         const tradeTypes = {
           buyCount: buyTrades.length,
@@ -114,28 +127,28 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
         };
 
         if (existingEventIndex >= 0) {
-          // Update existing event
+          // Update existing event if this is a deeper drawdown
           const event = events[existingEventIndex];
           if (drawdownPercent > event.drawdownPercent) {
-            event.endDate = item.date;
-            event.troughBalance = currentBalance;
+            event.endDate = trade.time;
+            event.troughBalance = runningBalance;
             event.drawdownPercent = drawdownPercent;
             event.drawdownAmount = drawdownAmount;
-            event.duration = (new Date(item.date).getTime() - new Date(event.startDate).getTime()) / (1000 * 60 * 60);
-            event.triggerTrades = triggerTrades;
+            event.duration = (new Date(trade.time).getTime() - new Date(event.startDate).getTime()) / (1000 * 60 * 60);
+            event.triggerTrades = [...filteredTriggerTrades];
             event.tradeTypes = tradeTypes;
           }
         } else {
           // Create new event
           events.push({
             startDate: drawdownStart,
-            endDate: item.date,
+            endDate: trade.time,
             peakBalance,
-            troughBalance: currentBalance,
+            troughBalance: runningBalance,
             drawdownPercent,
             drawdownAmount,
-            duration: (new Date(item.date).getTime() - new Date(drawdownStart).getTime()) / (1000 * 60 * 60),
-            triggerTrades,
+            duration: (new Date(trade.time).getTime() - new Date(drawdownStart).getTime()) / (1000 * 60 * 60),
+            triggerTrades: [...filteredTriggerTrades],
             tradeTypes
           });
         }
@@ -143,7 +156,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     }
 
     return events;
-  }, [markToMarketData, initialBalance, thresholdPercent, filterType]);
+  }, [trades, initialBalance, thresholdPercent, filterType]);
 
   // Filter and sort events
   const filteredEvents = useMemo(() => {
@@ -211,6 +224,25 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       totalSellTriggers
     };
   }, [filteredEvents]);
+
+  const toggleRowExpansion = (index: number) => {
+    const newExpandedRows = new Set(expandedRows);
+    if (newExpandedRows.has(index)) {
+      newExpandedRows.delete(index);
+    } else {
+      newExpandedRows.add(index);
+    }
+    setExpandedRows(newExpandedRows);
+  };
+
+  const collapseAllRows = () => {
+    setExpandedRows(new Set());
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toISOString().replace('T', ' ').slice(0, 16);
+  };
 
   return (
     <div className="bg-white rounded-lg shadow p-6">
@@ -286,31 +318,43 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       </div>
 
       {/* Sort Controls */}
-      <div className="flex items-center space-x-4 mb-6">
-        <div className="flex items-center space-x-2">
-          <label className="text-sm font-medium text-gray-700">Sort by:</label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-3 py-1 border border-gray-300 rounded text-sm"
-          >
-            <option value="percent">Drawdown %</option>
-            <option value="amount">Amount</option>
-            <option value="duration">Duration</option>
-            <option value="date">Date</option>
-          </select>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-700">Sort by:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-3 py-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="percent">Drawdown %</option>
+              <option value="amount">Amount</option>
+              <option value="duration">Duration</option>
+              <option value="date">Date</option>
+            </select>
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-700">Order:</label>
+            <select
+              value={sortOrder}
+              onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
+              className="px-3 py-1 border border-gray-300 rounded text-sm"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
+            </select>
+          </div>
         </div>
-        <div className="flex items-center space-x-2">
-          <label className="text-sm font-medium text-gray-700">Order:</label>
-          <select
-            value={sortOrder}
-            onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-            className="px-3 py-1 border border-gray-300 rounded text-sm"
+
+        {expandedRows.size > 0 && (
+          <button
+            onClick={collapseAllRows}
+            className="flex items-center px-3 py-1 text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 rounded-md transition-colors"
           >
-            <option value="desc">Descending</option>
-            <option value="asc">Ascending</option>
-          </select>
-        </div>
+            <Minus className="h-4 w-4 mr-1" />
+            Collapse All
+          </button>
+        )}
       </div>
 
       {/* Statistics */}
@@ -349,6 +393,9 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Details
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 #
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -381,59 +428,156 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredEvents.map((event, index) => (
-              <tr key={index} className="hover:bg-gray-50">
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {index + 1}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {new Date(event.startDate).toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {new Date(event.endDate).toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                  {event.drawdownPercent.toFixed(2)}%
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                  {formatCurrency(event.drawdownAmount)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {event.duration.toFixed(1)}h
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatCurrency(event.peakBalance)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {formatCurrency(event.troughBalance)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  <div className="flex space-x-2">
-                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                      B: {event.tradeTypes.buyCount}
-                    </span>
-                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">
-                      S: {event.tradeTypes.sellCount}
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Vol: {event.tradeTypes.totalVolume.toFixed(2)}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {event.recoveryDate ? (
-                    <div>
-                      <div className="text-green-600 font-medium">Recovered</div>
-                      <div className="text-xs text-gray-500">
-                        {event.recoveryDuration?.toFixed(1)}h
+            {filteredEvents.map((event, index) => {
+              const isExpanded = expandedRows.has(index);
+              
+              return (
+                <React.Fragment key={index}>
+                  <tr className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => toggleRowExpansion(index)}
+                        className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+                        disabled={event.triggerTrades.length === 0}
+                      >
+                        {event.triggerTrades.length > 0 ? (
+                          isExpanded ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )
+                        ) : (
+                          <span className="text-xs text-gray-300">-</span>
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {index + 1}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatDate(event.startDate)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatDate(event.endDate)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
+                      {event.drawdownPercent.toFixed(2)}%
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
+                      {formatCurrency(event.drawdownAmount)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {event.duration.toFixed(1)}h
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(event.peakBalance)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(event.troughBalance)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <div className="flex space-x-2">
+                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                          B: {event.tradeTypes.buyCount}
+                        </span>
+                        <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">
+                          S: {event.tradeTypes.sellCount}
+                        </span>
                       </div>
-                    </div>
-                  ) : (
-                    <span className="text-orange-600">Ongoing</span>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Vol: {event.tradeTypes.totalVolume.toFixed(2)}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {event.recoveryDate ? (
+                        <div>
+                          <div className="text-green-600 font-medium">Recovered</div>
+                          <div className="text-xs text-gray-500">
+                            {event.recoveryDuration?.toFixed(1)}h
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-orange-600">Ongoing</span>
+                      )}
+                    </td>
+                  </tr>
+                  
+                  {isExpanded && event.triggerTrades.length > 0 && (
+                    <tr>
+                      <td colSpan={11} className="px-6 py-4 bg-gray-50">
+                        <div className="space-y-3">
+                          <h4 className="text-sm font-medium text-gray-900 mb-3">
+                            Drawdown Trigger Trades ({event.triggerTrades.length} trades)
+                          </h4>
+                          <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
+                              <thead className="bg-gray-100">
+                                <tr>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Deal</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Direction</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Volume</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
+                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Balance</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-200">
+                                {event.triggerTrades.map((trade, tradeIndex) => (
+                                  <tr key={tradeIndex} className="hover:bg-gray-50">
+                                    <td className="px-4 py-2 text-sm text-gray-900">
+                                      {formatDate(trade.time)}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-900">{trade.deal}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-900 font-medium">{trade.symbol}</td>
+                                    <td className="px-4 py-2 text-sm">
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        trade.type.toLowerCase() === 'buy' 
+                                          ? 'bg-green-100 text-green-800' 
+                                          : 'bg-red-100 text-red-800'
+                                      }`}>
+                                        {trade.type.toUpperCase()}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-sm">
+                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        trade.direction.toLowerCase() === 'in' 
+                                          ? 'bg-blue-100 text-blue-800' 
+                                          : 'bg-orange-100 text-orange-800'
+                                      }`}>
+                                        {trade.direction.toUpperCase()}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-900">{trade.volume}</td>
+                                    <td className="px-4 py-2 text-sm text-gray-900">
+                                      {formatCurrency(trade.price)}
+                                    </td>
+                                    <td className="px-4 py-2 text-sm">
+                                      <span className={`font-medium ${
+                                        parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 
+                                          ? 'text-green-600' 
+                                          : 'text-red-600'
+                                      }`}>
+                                        {formatCurrency(trade.profit)}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-2 text-sm text-gray-900">
+                                      {formatCurrency(trade.balance)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </td>
-              </tr>
-            ))}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -222,13 +222,11 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
       </div>
 
       {/* Drawdown Calculator */}
-      <div className="bg-white rounded-lg shadow">
-        <DrawdownCalculator 
-          markToMarketData={data?.markToMarketData || []}
-          initialBalance={initialBalance}
-          selectedSymbol={selectedSymbol}
-        />
-      </div>
+      <DrawdownCalculator 
+        trades={symbolTrades}
+        initialBalance={initialBalance}
+        selectedSymbol={selectedSymbol}
+      />
     </div>
   );
 };
