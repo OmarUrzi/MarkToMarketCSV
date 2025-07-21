@@ -5,7 +5,8 @@ import {
   renderPeriodReturnsChart, 
   renderBalanceAreaChart, 
   renderDrawdownChart,
-  DrillDownState
+  DrillDownState,
+  DrawdownMode
 } from '../utils/newChartUtils';
 
 interface NewChartSectionProps {
@@ -29,6 +30,9 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
   
   // Drill-down state for period returns chart
   const [drillDownState, setDrillDownState] = useState<DrillDownState>({ level: 'monthly' });
+  
+  // Drawdown mode state
+  const [drawdownMode, setDrawdownMode] = useState<DrawdownMode>('realized');
 
   // Filter trades for selected symbol
   const symbolTrades = data?.tradeHistory?.filter(trade => 
@@ -114,7 +118,8 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         symbolTrades,
         initialBalance,
         selectedSymbol,
-        data?.markToMarketData // Pass mark-to-market data for real-time drawdown
+        data?.markToMarketData,
+        drawdownMode
       );
       
       setDrawdownChartInstance(chart);
@@ -128,11 +133,11 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
     } else if (drawdownChartRef.current) {
       drawdownChartRef.current.innerHTML = `
         <div class="flex items-center justify-center h-full text-gray-500">
-          No drawdown data available for ${selectedSymbol}
+          No ${drawdownMode} drawdown data available for ${selectedSymbol}
         </div>
       `;
     }
-  }, [data, selectedSymbol, symbolTrades.length, initialBalance, data?.markToMarketData?.length]);
+  }, [data, selectedSymbol, symbolTrades.length, initialBalance, data?.markToMarketData?.length, drawdownMode]);
   
   if (!data) return null;
   
@@ -204,15 +209,51 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
       <div className="bg-white rounded-lg shadow">
         <div className="p-4 border-b">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium">Drawdown Analysis - {selectedSymbol}</h3>
-            <div className="text-sm text-gray-500">
-              Drawdown percentage from peak balance
+            <h3 className="text-lg font-medium">
+              Drawdown Analysis - {selectedSymbol}
+              <span className="text-sm text-gray-500 ml-2">
+                ({drawdownMode === 'realized' ? 'Realized' : 'Unrealized'})
+              </span>
+            </h3>
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <span className="text-sm text-gray-600">Mode:</span>
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    onClick={() => setDrawdownMode('realized')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      drawdownMode === 'realized'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    Realized
+                  </button>
+                  <button
+                    onClick={() => setDrawdownMode('unrealized')}
+                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                      drawdownMode === 'unrealized'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    Unrealized
+                  </button>
+                </div>
+              </div>
+              <div className="text-sm text-gray-500">
+                {drawdownMode === 'realized' 
+                  ? 'Closed trades only' 
+                  : 'Including open positions'}
+              </div>
             </div>
           </div>
           <div className="flex space-x-4">
             <div className="flex items-center">
               <div className="h-3 w-3 rounded-full bg-blue-500 mr-2"></div>
-              <span className="text-sm text-gray-600">Drawdown %</span>
+              <span className="text-sm text-gray-600">
+                {drawdownMode === 'realized' ? 'Realized' : 'Unrealized'} Drawdown %
+              </span>
             </div>
           </div>
         </div>
@@ -226,6 +267,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
         trades={symbolTrades}
         initialBalance={initialBalance}
         selectedSymbol={selectedSymbol}
+        markToMarketData={data?.markToMarketData}
       />
     </div>
   );

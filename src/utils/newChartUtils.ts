@@ -1,6 +1,9 @@
 import { TradeHistoryItem, MarkToMarketItem } from '../types';
 import { createChart, ColorType, LineStyle, CrosshairMode } from 'lightweight-charts';
 
+// Types for drawdown calculation modes
+export type DrawdownMode = 'realized' | 'unrealized';
+
 // Types for drill-down functionality
 export interface DrillDownState {
   level: 'monthly' | 'detailed';
@@ -239,19 +242,18 @@ export const calculateBalanceHistory = (
 export const calculateDrawdownHistory = (
   trades: TradeHistoryItem[],
   initialBalance: number,
-  markToMarketData?: MarkToMarketItem[]
+  markToMarketData?: MarkToMarketItem[],
+  mode: DrawdownMode = 'realized'
 ) => {
-  // If we have mark-to-market data, use it for real-time drawdown calculation
-  if (markToMarketData && markToMarketData.length > 0) {
-    return calculateRealTimeDrawdown(markToMarketData, initialBalance);
+  if (mode === 'unrealized' && markToMarketData && markToMarketData.length > 0) {
+    return calculateUnrealizedDrawdown(markToMarketData, initialBalance);
+  } else {
+    return calculateRealizedDrawdown(trades, initialBalance);
   }
-  
-  // Fallback to old method if no mark-to-market data
-  return calculateClosedTradesDrawdown(trades, initialBalance);
 };
 
-// New function: Calculate drawdown using real-time mark-to-market data
-const calculateRealTimeDrawdown = (
+// Calculate unrealized drawdown using mark-to-market data (includes open positions)
+const calculateUnrealizedDrawdown = (
   markToMarketData: MarkToMarketItem[],
   initialBalance: number
 ) => {
@@ -289,8 +291,8 @@ const calculateRealTimeDrawdown = (
     .sort((a, b) => a.time - b.time);
 };
 
-// Original function: Calculate drawdown based only on closed trades (fallback)
-const calculateClosedTradesDrawdown = (
+// Calculate realized drawdown based only on closed trades
+const calculateRealizedDrawdown = (
   trades: TradeHistoryItem[],
   initialBalance: number
 ) => {
@@ -948,18 +950,19 @@ export const renderDrawdownChart = (
   trades: TradeHistoryItem[],
   initialBalance: number,
   selectedSymbol?: string,
-  markToMarketData?: MarkToMarketItem[]
+  markToMarketData?: MarkToMarketItem[],
+  mode: DrawdownMode = 'realized'
 ): { chart: any; cleanup: () => void } => {
   container.innerHTML = '';
 
-  const drawdownHistory = calculateDrawdownHistory(trades, initialBalance, markToMarketData);
+  const drawdownHistory = calculateDrawdownHistory(trades, initialBalance, markToMarketData, mode);
   
   if (drawdownHistory.length === 0) {
     const message = document.createElement('div');
     message.className = 'flex items-center justify-center h-full text-gray-500';
     message.textContent = selectedSymbol 
-      ? `No drawdown data available for ${selectedSymbol}`
-      : 'No drawdown data available';
+      ? `No ${mode} drawdown data available for ${selectedSymbol}`
+      : `No ${mode} drawdown data available`;
     container.appendChild(message);
     return { chart: null, cleanup: () => {} };
   }
