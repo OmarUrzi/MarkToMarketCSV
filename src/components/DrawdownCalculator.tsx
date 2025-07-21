@@ -44,17 +44,6 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [drawdownMode, setDrawdownMode] = useState<DrawdownMode>('realized');
 
-  // Calculate drawdown events based on mode
-  const drawdownEvents = useMemo(() => {
-    if (!trades || trades.length === 0) return [];
-
-    if (drawdownMode === 'unrealized' && markToMarketData && markToMarketData.length > 0) {
-      return calculateUnrealizedDrawdownEvents();
-    } else {
-      return calculateRealizedDrawdownEvents();
-    }
-  }, [trades, initialBalance, thresholdPercent, filterType, drawdownMode, markToMarketData]);
-
   // Calculate realized drawdown events (closed trades only)
   const calculateRealizedDrawdownEvents = () => {
     const events: DrawdownEvent[] = [];
@@ -295,6 +284,17 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
 
     return events;
   };
+
+  // Calculate drawdown events based on mode
+  const drawdownEvents = useMemo(() => {
+    if (!trades || trades.length === 0) return [];
+
+    if (drawdownMode === 'unrealized' && markToMarketData && markToMarketData.length > 0) {
+      return calculateUnrealizedDrawdownEvents();
+    } else {
+      return calculateRealizedDrawdownEvents();
+    }
+  }, [trades, initialBalance, thresholdPercent, filterType, drawdownMode, markToMarketData]);
 
   // Filter and sort events
   const filteredEvents = useMemo(() => {
