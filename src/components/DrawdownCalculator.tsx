@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { Calculator, TrendingDown, ChevronDown, ChevronRight, Minus } from 'lucide-react';
-import { TradeHistoryItem } from '../types';
+import { TradeHistoryItem, MarkToMarketItem } from '../types';
 import { formatCurrency, formatPercentage, formatVolume } from '../utils/numberFormatter';
+import { DrawdownMode } from '../utils/newChartUtils';
 
 interface DrawdownCalculatorProps {
   trades: TradeHistoryItem[];
   initialBalance: number;
   selectedSymbol?: string;
+  markToMarketData?: MarkToMarketItem[];
 }
 
 interface DrawdownEvent {
@@ -30,7 +32,8 @@ interface DrawdownEvent {
 export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
   trades,
   initialBalance,
-  selectedSymbol
+  selectedSymbol,
+  markToMarketData = []
 }) => {
   const [thresholdPercent, setThresholdPercent] = useState<number>(5);
   const [filterType, setFilterType] = useState<'all' | 'buy' | 'sell'>('all');
@@ -39,11 +42,21 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
   const [sortBy, setSortBy] = useState<'percent' | 'amount' | 'duration' | 'date'>('percent');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [drawdownMode, setDrawdownMode] = useState<DrawdownMode>('realized');
 
-  // Calculate drawdown events based on CSV trades
+  // Calculate drawdown events based on mode
   const drawdownEvents = useMemo(() => {
     if (!trades || trades.length === 0) return [];
 
+    if (drawdownMode === 'unrealized' && markToMarketData && markToMarketData.length > 0) {
+      return calculateUnrealizedDrawdownEvents();
+    } else {
+      return calculateRealizedDrawdownEvents();
+    }
+  }, [trades, initialBalance, thresholdPercent, filterType, drawdownMode, markToMarketData]);
+
+  // Calculate realized drawdown events (closed trades only)
+  const calculateRealizedDrawdownEvents = () => {
     const events: DrawdownEvent[] = [];
     let peakBalance = initialBalance;
     let peakDate = '';
@@ -156,7 +169,132 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     }
 
     return events;
-  }, [trades, initialBalance, thresholdPercent, filterType]);
+  };
+
+  // Calculate unrealized drawdown events (including open positions)
+  const calculateUnrealizedDrawdownEvents = () => {
+    if (!markToMarketData || markToMarketData.length === 0) return [];
+
+    const events: DrawdownEvent[] = [];
+    let peakBalance = initialBalance;
+    let peakDate = '';
+    let inDrawdown = false;
+    let drawdownStart = '';
+    let drawdownTrades: TradeHistoryItem[] = [];
+
+    // Sort mark-to-market data by time
+    const sortedMTMData = [...markToMarketData].sort((a, b) => 
+      new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    for (let i = 0; i < sortedMTMData.length; i++) {
+      const mtmItem = sortedMTMData[i];
+      
+      // Calculate current balance: initial + closed P&L + open P&L
+      const closedPnL = parseFloat(mtmItem.closed.replace(/[^\d.-]/g, '') || '0');
+      const openPnL = parseFloat(mtmItem.open.replace(/[^\d.-]/g, '') || '0');
+      const currentBalance = initialBalance + closedPnL + openPnL;
+
+      // Update peak if current balance is higher
+      if (currentBalance > peakBalance) {
+        peakBalance = currentBalance;
+        peakDate = mtmItem.date;
+        
+        // If we were in drawdown and recovered, end the drawdown event
+        if (inDrawdown) {
+          const lastEvent = events[events.length - 1];
+          if (lastEvent) {
+            lastEvent.recoveryDate = mtmItem.date;
+            lastEvent.recoveryDuration = 
+              (new Date(mtmItem.date).getTime() - new Date(lastEvent.endDate).getTime()) / (1000 * 60 * 60);
+          }
+          inDrawdown = false;
+          drawdownTrades = [];
+        }
+      }
+
+      // Calculate current drawdown
+      const drawdownPercent = peakBalance > 0 ? 
+        ((peakBalance - currentBalance) / peakBalance) * 100 : 0;
+      const drawdownAmount = peakBalance - currentBalance;
+
+      // Check if we hit the threshold
+      if (drawdownPercent >= thresholdPercent && !inDrawdown) {
+        inDrawdown = true;
+        drawdownStart = mtmItem.date;
+        drawdownTrades = [];
+      }
+
+      // If in drawdown, collect trades that occurred around this time
+      if (inDrawdown) {
+        const mtmTime = new Date(mtmItem.date);
+        const relevantTrades = trades.filter(trade => {
+          const tradeTime = new Date(trade.time);
+          const timeDiff = Math.abs(tradeTime.getTime() - mtmTime.getTime());
+          return timeDiff <= 15 * 60 * 1000; // Within 15 minutes
+        });
+        
+        for (const trade of relevantTrades) {
+          if (!drawdownTrades.find(t => t.deal === trade.deal)) {
+            drawdownTrades.push(trade);
+          }
+        }
+      }
+
+      // If in drawdown and this is a new maximum drawdown, update or create event
+      if (inDrawdown && drawdownPercent >= thresholdPercent) {
+        const existingEventIndex = events.findIndex(event => 
+          event.startDate === drawdownStart && !event.recoveryDate
+        );
+
+        // Filter trades based on filter type
+        const filteredTriggerTrades = drawdownTrades.filter(t => {
+          if (filterType === 'all') return true;
+          return t.type.toLowerCase() === filterType;
+        });
+
+        // Calculate trade statistics
+        const buyTrades = filteredTriggerTrades.filter(t => t.type.toLowerCase() === 'buy');
+        const sellTrades = filteredTriggerTrades.filter(t => t.type.toLowerCase() === 'sell');
+        const totalVolume = filteredTriggerTrades.reduce((sum, t) => sum + parseFloat(t.volume || '0'), 0);
+
+        const tradeTypes = {
+          buyCount: buyTrades.length,
+          sellCount: sellTrades.length,
+          totalVolume
+        };
+
+        if (existingEventIndex >= 0) {
+          // Update existing event if this is a deeper drawdown
+          const event = events[existingEventIndex];
+          if (drawdownPercent > event.drawdownPercent) {
+            event.endDate = mtmItem.date;
+            event.troughBalance = currentBalance;
+            event.drawdownPercent = drawdownPercent;
+            event.drawdownAmount = drawdownAmount;
+            event.duration = (new Date(mtmItem.date).getTime() - new Date(event.startDate).getTime()) / (1000 * 60 * 60);
+            event.triggerTrades = [...filteredTriggerTrades];
+            event.tradeTypes = tradeTypes;
+          }
+        } else {
+          // Create new event
+          events.push({
+            startDate: drawdownStart,
+            endDate: mtmItem.date,
+            peakBalance,
+            troughBalance: currentBalance,
+            drawdownPercent,
+            drawdownAmount,
+            duration: (new Date(mtmItem.date).getTime() - new Date(drawdownStart).getTime()) / (1000 * 60 * 60),
+            triggerTrades: [...filteredTriggerTrades],
+            tradeTypes
+          });
+        }
+      }
+    }
+
+    return events;
+  };
 
   // Filter and sort events
   const filteredEvents = useMemo(() => {
@@ -254,10 +392,46 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
             {selectedSymbol}
           </span>
         )}
+        <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-700 rounded text-sm">
+          {drawdownMode === 'realized' ? 'Realized' : 'Unrealized'}
+        </span>
       </div>
 
       {/* Controls */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Drawdown Mode
+          </label>
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setDrawdownMode('realized')}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                drawdownMode === 'realized'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Realized
+            </button>
+            <button
+              onClick={() => setDrawdownMode('unrealized')}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                drawdownMode === 'unrealized'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+              disabled={!markToMarketData || markToMarketData.length === 0}
+              title={!markToMarketData || markToMarketData.length === 0 ? 'No mark-to-market data available' : ''}
+            >
+              Unrealized
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {drawdownMode === 'realized' ? 'Closed trades only' : 'Including open positions'}
+          </div>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Threshold (%)
@@ -585,8 +759,13 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       {filteredEvents.length === 0 && (
         <div className="text-center py-8 text-gray-500">
           <TrendingDown className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-          <p>No drawdown events found with the current filters.</p>
+          <p>No {drawdownMode} drawdown events found with the current filters.</p>
           <p className="text-sm">Try adjusting the threshold or filters.</p>
+          {drawdownMode === 'unrealized' && (!markToMarketData || markToMarketData.length === 0) && (
+            <p className="text-sm text-orange-600 mt-2">
+              No mark-to-market data available for unrealized drawdown calculation.
+            </p>
+          )}
         </div>
       )}
     </div>
