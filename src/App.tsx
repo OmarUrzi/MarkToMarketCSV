@@ -31,6 +31,11 @@ function App() {
       setIsDataLoaded(false);
       setBacktestData(null);
       
+      // Check if file is empty
+      if (file.size === 0) {
+        throw new Error('The uploaded file is empty. Please select a valid file.');
+      }
+      
       const fileName = file.name.toLowerCase();
       let data: BacktestData;
 
@@ -54,10 +59,10 @@ function App() {
     } catch (error) {
       console.error('Error processing file:', {
         error,
-        message: error.message,
+        message: error?.message || 'Unknown error',
         stack: error.stack
       });
-      setError(error instanceof Error ? error.message : 'Failed to parse file');
+      setError(error instanceof Error ? error.message : 'Failed to parse file. Please check the file format and try again.');
       setIsDataLoaded(false);
       setBacktestData(null);
     }

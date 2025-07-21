@@ -559,12 +559,25 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         }
 
         const csvContent = event.target.result as string;
+        
+        // Check if file is empty
+        if (!csvContent.trim()) {
+          throw new Error('File is empty. Please upload a valid CSV or HTML file.');
+        }
+        
         console.log('CSV Content preview:', csvContent.substring(0, 500));
         
         console.log('Converting CSV to unified format...');
         
-        // Convertir CSV a formato unificado
-        const convertedData = convertCSVToUnified(csvContent, csvTimezone, customInitialBalance);
+        let convertedData;
+        try {
+          // Convertir CSV a formato unificado
+          convertedData = convertCSVToUnified(csvContent, csvTimezone, customInitialBalance);
+        } catch (error) {
+          // If CSV conversion fails, it might be an HTML file
+          console.log('CSV conversion failed, trying HTML conversion:', error.message);
+          throw new Error('Invalid CSV format. Please ensure your file has the correct CSV structure with headers and data rows, or upload an HTML backtest report instead.');
+        }
         
         console.log('CSV converted to unified format:', {
           symbol: convertedData.metadata.symbol,

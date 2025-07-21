@@ -162,17 +162,31 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
 export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0, customInitialBalance: number = 10000): ConvertedCSVData => {
   const lines = csvContent.trim().split('\n');
   if (lines.length < 2) {
-    throw new Error('CSV file must contain at least a header row and one data row');
+    throw new Error('CSV file must contain at least a header row and one data row. Found ' + lines.length + ' lines.');
   }
 
   // Parse headers
   let headers: string[];
   const firstLine = lines[0];
   
+  if (!firstLine || firstLine.trim() === '') {
+    throw new Error('CSV file appears to be empty or has no valid header row.');
+  }
+  
   if (firstLine.includes('\t')) {
     headers = firstLine.split('\t').map(h => h.trim());
   } else {
     headers = firstLine.split(',').map(h => h.trim());
+  }
+  
+  // Validate that we have some expected headers
+  const requiredHeaders = ['Time', 'Symbol', 'Type', 'Volume', 'Price', 'Profit'];
+  const hasRequiredHeaders = requiredHeaders.some(required => 
+    headers.some(header => header.toLowerCase().includes(required.toLowerCase()))
+  );
+  
+  if (!hasRequiredHeaders) {
+    throw new Error('CSV file does not contain expected trading data headers. Please check the file format.');
   }
 
   const trades: TradeHistoryItem[] = [];
@@ -181,7 +195,7 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
   // Procesar cada fila del CSV
   for (let i = 1; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (!line) continue;
+    if (!line) continue; // Skip empty lines
 
     let values: string[];
     if (line.includes('\t')) {
