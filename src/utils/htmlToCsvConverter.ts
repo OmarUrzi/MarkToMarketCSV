@@ -38,9 +38,10 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
   const csvHeader = 'Time,Position,Symbol,Type,Volume,Price,S / L,T / P,Time,Price,Commission,Swap,Profit';
   csvRows.push(csvHeader);
 
-  // Procesar filas de la tabla de deals
+  // Procesar filas de la tabla de deals y agrupar por pares open/close
   const rows = dealsTable.getElementsByTagName('tr');
-  const completedTrades = new Map<string, any>(); // Para agrupar trades por posición
+  const openTrades: any[] = []; // Stack de trades abiertos
+  const completedTrades: any[] = []; // Trades completos (open + close)
 
   for (let i = 1; i < rows.length; i++) {
     const cells = rows[i].getElementsByTagName('td');
@@ -48,8 +49,9 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
     if (cells.length >= 13) {
       const timeStr = cells[0].textContent?.trim() || '';
       
-      // Saltar filas de balance y headers
-      if (!timeStr || timeStr === 'Time' || cells[3].textContent?.trim() === 'balance') {
+      // Saltar filas de balance, headers y filas vacías
+      const type = cells[3].textContent?.trim() || '';
+      if (!timeStr || timeStr === 'Time' || type === 'balance' || type === '') {
         continue;
       }
 
@@ -57,7 +59,6 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
         const validTime = parseMTDateTime(timeStr);
         const deal = cells[1].textContent?.trim() || '';
         const symbolCell = cells[2].textContent?.trim() || '';
-        const type = cells[3].textContent?.trim() || '';
         const direction = cells[4].textContent?.trim() || '';
         const volume = cells[5].textContent?.trim() || '';
         const price = cells[6].textContent?.trim() || '';
@@ -68,11 +69,10 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
         const balance = cells[11].textContent?.trim() || '';
         const comment = cells[12].textContent?.trim() || '';
 
-        // Crear trade entry
-        const trade: TradeHistoryItem = {
+        const tradeData = {
           time: validTime,
           deal,
-          symbol: symbolCell,
+          symbol: symbolCell || symbol, // Usar symbol por defecto si está vacío
           type,
           direction,
           volume,
@@ -82,45 +82,35 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
           swap,
           profit,
           balance,
-          comment,
-          position: order, // Usar order como position ID
-          closed: '$0.00',
-          aep: '0',
-          open: '$0.00',
-          total: '$0.00'
+          comment
         };
 
-        trades.push(trade);
-
-        // Agrupar trades para crear formato CSV
         if (direction.toLowerCase() === 'in') {
-          // Trade de entrada - iniciar nueva posición
-          completedTrades.set(order, {
-            entryTime: validTime,
-            entryPrice: price,
-            position: order,
-            symbol: symbolCell,
-            type,
-            volume,
-            commission: '0.00',
-            swap: '0.00',
-            profit: '0.00',
-            stopLoss: '',
-            takeProfit: '',
-            comment
-          });
+          // Trade de entrada - agregar al stack
+          openTrades.push(tradeData);
         } else if (direction.toLowerCase() === 'out') {
-          // Trade de salida - completar posición
-          const openTrade = completedTrades.get(order);
+          // Trade de salida - buscar el trade de entrada correspondiente por volumen
+          const matchingIndex = openTrades.findIndex(openTrade => 
+            parseFloat(openTrade.volume) === parseFloat(volume) &&
+            openTrade.symbol === (symbolCell || symbol) &&
+            // Verificar que el tipo sea opuesto (buy cierra con sell, sell cierra con buy)
+            ((openTrade.type.toLowerCase() === 'buy' && type.toLowerCase() === 'sell') ||
+             (openTrade.type.toLowerCase() === 'sell' && type.toLowerCase() === 'buy'))
+          );
+          
+          const openTrade = matchingIndex >= 0 ? openTrades[matchingIndex] : null;
           if (openTrade) {
+            // Remover el trade abierto del stack
+            openTrades.splice(matchingIndex, 1);
+            
             // Crear fila CSV para trade completo
             const csvRow = [
-              formatDateForCSV(openTrade.entryTime), // Entry time
-              openTrade.position, // Position
+              formatDateForCSV(openTrade.time), // Entry time
+              openTrade.order, // Position
               openTrade.symbol, // Symbol
               openTrade.type, // Type
               openTrade.volume, // Volume
-              openTrade.entryPrice, // Entry price
+              openTrade.price, // Entry price
               '', // S/L (vacío por ahora)
               '', // T/P (vacío por ahora)
               formatDateForCSV(validTime), // Exit time
@@ -131,7 +121,54 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
             ].join(',');
             
             csvRows.push(csvRow);
-            completedTrades.delete(order);
+            
+            // Crear trades individuales para el array de trades
+            const openTradeItem: TradeHistoryItem = {
+              time: openTrade.time,
+              deal: openTrade.deal,
+              symbol: openTrade.symbol,
+              type: openTrade.type,
+              direction: 'in',
+              volume: openTrade.volume,
+              price: openTrade.price,
+              order: openTrade.order,
+              commission: '0.00',
+              swap: '0.00',
+              profit: '0.00',
+              balance: openTrade.balance,
+              comment: openTrade.comment,
+              position: openTrade.order,
+              closed: '$0.00',
+              aep: '0',
+              open: '$0.00',
+              total: '$0.00'
+            };
+            
+            const closeTradeItem: TradeHistoryItem = {
+              time: validTime,
+              deal,
+              symbol: symbolCell || symbol,
+              type,
+              direction: 'out',
+              volume,
+              price,
+              order,
+              commission,
+              swap,
+              profit,
+              balance,
+              comment,
+              position: order,
+              closed: '$0.00',
+              aep: '0',
+              open: '$0.00',
+              total: '$0.00'
+            };
+            
+            trades.push(openTradeItem);
+            trades.push(closeTradeItem);
+          } else {
+            console.warn(`No matching open trade found for close trade: Deal ${deal}, Volume ${volume}, Type ${type}`);
           }
         }
       } catch (error) {
@@ -139,6 +176,11 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
         continue;
       }
     }
+  }
+  
+  // Advertir sobre trades abiertos sin cerrar
+  if (openTrades.length > 0) {
+    console.warn(`Found ${openTrades.length} open trades without matching close trades`);
   }
 
   const csvContent = csvRows.join('\n');
@@ -151,7 +193,7 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
       expertName,
       initialBalance,
       totalNetProfit,
-      totalTrades: trades.filter(t => parseFloat(t.profit.replace(/[^\d.-]/g, '') || '0') !== 0).length
+      totalTrades: Math.floor(trades.length / 2) // Dividir por 2 porque tenemos pares in/out
     }
   };
 };

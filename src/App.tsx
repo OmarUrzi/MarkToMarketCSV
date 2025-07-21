@@ -46,7 +46,7 @@ function App() {
         // Handle HTML file
         data = await parseHtmlFile(file, timezone, initialAmount);
       } else {
-        throw new Error('Please upload either an HTML file from MT4/MT5 backtest report or a CSV file with trade data');
+        throw new Error('Please upload either an HTML file (.html/.htm) from MT4/MT5 backtest report or a CSV file (.csv) with trade data');
       }
 
       if (!data) {
@@ -62,7 +62,8 @@ function App() {
         message: error?.message || 'Unknown error',
         stack: error.stack
       });
-      setError(error instanceof Error ? error.message : 'Failed to parse file. Please check the file format and try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to parse file. Please check the file format and try again.';
+      setError(errorMessage);
       setIsDataLoaded(false);
       setBacktestData(null);
     }
