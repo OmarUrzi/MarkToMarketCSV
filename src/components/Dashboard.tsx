@@ -1,7 +1,8 @@
 import React from 'react';
-import { TrendingUp, BarChart2, RefreshCw, ArrowDownRight, ChevronDown } from 'lucide-react';
+import { TrendingUp, BarChart2, RefreshCw, ArrowDownRight, ChevronDown, Download } from 'lucide-react';
 import { BacktestData } from '../types';
 import { formatCurrency } from '../utils/numberFormatter';
+import { generateCSVFromTrades } from '../utils/htmlToCsvConverter';
 
 interface DashboardProps {
   data: BacktestData | null;
@@ -37,6 +38,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const handleSymbolChange = (newSymbol: string) => {
     console.log(`Dashboard: Symbol change requested from ${selectedSymbol} to ${newSymbol}`);
     onSymbolChange(newSymbol);
+  };
+
+  const handleDownloadRawData = () => {
+    try {
+      // Generar CSV desde los datos actuales
+      const csvContent = generateCSVFromTrades(data.tradeHistory, {
+        symbol: data.currencyPair,
+        expertName: data.expertName,
+        initialBalance: data.initialBalance,
+        totalNetProfit: data.totalProfit,
+        totalTrades: data.totalTrades
+      });
+      
+      // Crear y descargar archivo
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `raw_data_${data.currencyPair}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading raw data:', error);
+      alert('Error generating CSV file. Please try again.');
+    }
   };
 
   return (
@@ -79,12 +108,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           )}
         </div>
-        <button 
-          onClick={handleNewUpload}
-          className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
-        >
-          New Upload
-        </button>
+        <div className="flex space-x-2">
+          <button 
+            onClick={handleDownloadRawData}
+            className="flex items-center px-3 py-1 bg-green-600 text-white rounded-md text-sm hover:bg-green-700 transition-colors"
+            title="Download processed data as CSV"
+          >
+            <Download className="h-4 w-4 mr-1" />
+            Raw Data
+          </button>
+          <button 
+            onClick={handleNewUpload}
+            className="px-3 py-1 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
+          >
+            New Upload
+          </button>
+        </div>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

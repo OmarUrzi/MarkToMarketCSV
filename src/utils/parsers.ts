@@ -2,6 +2,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2.39.0';
 import axios from 'axios';
 import { BacktestData, TradeHistoryItem, MarkToMarketItem } from '../types';
 import { apiTimeToCsvTime, csvTimeToApiTime } from './timezoneUtils';
+import { convertHtmlToCSV, generateCSVFromTrades } from './htmlToCsvConverter';
+import { parseCSVFile } from './csvParser';
 
 const parseMTDateTime = (dateStr: string): string => {
   try {
@@ -462,163 +464,33 @@ export const parseHtmlFile = async (file: File, csvTimezone: number = 0, customI
         }
 
         const html = event.target.result as string;
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-
-        const totalTables = doc.getElementsByTagName('table').length;
-        console.log(`Found ${totalTables} tables in the document`);
-
-        const initialBalance = extractInitialBalanceFromHTML(doc);
-        let drawdown = '0.00';
-        let totalNetProfit = '0.00';
         
-        const tables = Array.from(doc.getElementsByTagName('table'));
-        for (const table of tables) {
-          const rows = Array.from(table.getElementsByTagName('tr'));
-          for (const row of rows) {
-            const cells = row.getElementsByTagName('td');
-            for (let i = 0; i < cells.length; i++) {
-              const cell = cells[i];
-              const text = cell.textContent?.trim() || '';
-              
-              if (text === 'Balance Drawdown Absolute:') {
-                const valueCell = cells[i + 1];
-                const drawdownValue = valueCell?.querySelector('b')?.textContent?.trim() || '0.00';
-                drawdown = drawdownValue;
-              } else if (text === 'Total Net Profit:') {
-                const valueCell = cells[i + 1];
-                const profitValue = valueCell?.querySelector('b')?.textContent?.trim() || '0.00';
-                totalNetProfit = profitValue;
-              }
-            }
-          }
-        }
-
-        const dealsTable = findDealsTable(doc);
-        const currencyPair = extractSymbolFromHTML(doc) || 'XAUUSD';
-        const availableSymbols = extractAllSymbolsFromHTML(doc);
-        const expertName = extractExpertNameFromHTML(doc) || 'Unknown Expert';
-        const finalInitialBalance = customInitialBalance || initialBalance;
-
-        if (!dealsTable) {
-          console.error('Deals table not found. Document structure:', {
-            tables: totalTables,
-            tableHeaders: Array.from(doc.getElementsByTagName('table')).map(table => {
-              const caption = table.querySelector('caption')?.textContent;
-              const firstRow = table.querySelector('tr')?.textContent;
-              const innerHTML = table.innerHTML;
-              return { caption, firstRow, innerHTML };
-            })
-          });
-          throw new Error('Could not find Deals table in the report. The file might not be a valid MT4/MT5 backtest report, or it might have a different structure than expected. Please ensure you are uploading a complete backtest report file.');
-        }
-
-        let tradeHistory: TradeHistoryItem[] = [];
-        const rows = dealsTable.getElementsByTagName('tr');
-
-        for (let i = 1; i < rows.length; i++) {
-          const cells = rows[i].getElementsByTagName('td');
-          
-          if (cells.length >= 13) {
-            const timeStr = cells[0].textContent?.trim() || '';
-            
-            if (!timeStr || timeStr === 'Time') {
-              continue;
-            }
-
-            let validTime: string;
-            try {
-              validTime = parseMTDateTime(timeStr);
-            } catch (error) {
-              console.error(`Skipping row ${i} due to invalid time:`, timeStr);
-              continue;
-            }
-
-            const trade: TradeHistoryItem = {
-              time: validTime,
-              deal: cells[1].textContent?.trim() || '',
-              symbol: cells[2].textContent?.trim() || '',
-              type: cells[3].textContent?.trim() || '',
-              direction: cells[4].textContent?.trim() || '',
-              volume: cells[5].textContent?.trim() || '',
-              price: cells[6].textContent?.trim() || '',
-              order: cells[7].textContent?.trim() || '',
-              commission: cells[8].textContent?.trim() || '',
-              swap: cells[9].textContent?.trim() || '',
-              profit: cells[10].textContent?.trim() || '',
-              balance: cells[11].textContent?.trim() || '',
-              comment: cells[12].textContent?.trim() || '',
-              position: '0',
-              closed: '$0.00',
-              aep: '0',
-              open: '$0.00',
-              total: '$0.00'
-            };
-
-            if (trade.time && (trade.symbol || trade.type.toLowerCase() === 'balance')) {
-              tradeHistory.push(trade);
-            }
-          }
-        }
-
-        if (tradeHistory.length === 0) {
-          throw new Error('No valid trades found in the Deals table. Please ensure the report contains trading history data.');
-        }
-
-        // Calculate stats for the main symbol only
-        const mainSymbolTrades = tradeHistory.filter(trade => 
-          trade.symbol === currencyPair && parseFloat(trade.profit) !== 0
-        );
-        const profitableTrades = mainSymbolTrades.filter(trade => parseFloat(trade.profit) > 0);
-        const winRate = mainSymbolTrades.length > 0
-          ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2)
-          : '0.00';
-
-        const trades = tradeHistory.filter(trade => parseFloat(trade.profit) !== 0);
-        let markToMarketData = [];
-
-        if (trades.length > 0) {
-          // Find the first actual trade for the main symbol
-          const firstTrade = trades.find(trade => 
-            trade.type.toLowerCase() !== 'balance' && trade.symbol === currencyPair
-          );
-          const lastTrade = trades.filter(trade => trade.symbol === currencyPair).pop();
-
-          if (firstTrade && lastTrade) {
-            const fromDate = new Date(firstTrade.time);
-            const toDate = new Date(lastTrade.time);
-
-            try {
-              const marketData = await fetchMarketData(
-                currencyPair,
-                csvTimeToApiTime(fromDate.toISOString(), csvTimezone),
-                csvTimeToApiTime(toDate.toISOString(), csvTimezone)
-              );
-              markToMarketData = parseMarketData(marketData, tradeHistory, finalInitialBalance, currencyPair, csvTimezone);
-            } catch (error) {
-              console.error('Market data fetch error:', {
-                error,
-                message: error.message,
-                response: error.response?.data
-              });
-              markToMarketData = [];
-            }
-          }
-        }
-
-        resolve({
-          currencyPair,
-          expertName,
-          totalProfit: `$${totalNetProfit}`,
-          winRate: `${winRate}%`,
-          totalTrades: mainSymbolTrades.length.toString(),
-          maxDrawdown: `${drawdown}%`,
-          initialBalance: finalInitialBalance,
-          tradeHistory,
-          markToMarketData,
-          chartData: [],
-          availableSymbols
+        console.log('Converting HTML to unified CSV format...');
+        
+        // Convertir HTML a formato CSV unificado
+        const convertedData = convertHtmlToCSV(html, csvTimezone, customInitialBalance);
+        
+        console.log('HTML converted to CSV format:', {
+          symbol: convertedData.metadata.symbol,
+          totalTrades: convertedData.metadata.totalTrades,
+          tradesCount: convertedData.trades.length
         });
+        
+        // Crear un archivo CSV virtual y usar el parser CSV existente
+        const csvBlob = new Blob([convertedData.csvContent], { type: 'text/csv' });
+        const csvFile = new File([csvBlob], 'converted.csv', { type: 'text/csv' });
+        
+        // Usar el parser CSV existente para procesar los datos
+        const backtestData = await parseCSVFile(csvFile, csvTimezone, customInitialBalance || convertedData.metadata.initialBalance);
+        
+        // Actualizar metadatos con información del HTML
+        backtestData.expertName = convertedData.metadata.expertName;
+        backtestData.totalProfit = `$${convertedData.metadata.totalNetProfit}`;
+        
+        // Agregar el CSV convertido como propiedad para descarga
+        (backtestData as any).convertedCSV = convertedData.csvContent;
+        
+        resolve(backtestData);
 
       } catch (error) {
         console.error('Error processing file:', {

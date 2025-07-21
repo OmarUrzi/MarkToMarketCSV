@@ -1,6 +1,7 @@
 import { BacktestData, TradeHistoryItem, MarkToMarketItem } from '../types';
 import axios from 'axios';
 import { apiTimeToCsvTime, csvTimeToApiTime } from './timezoneUtils';
+import { convertCSVToUnified, generateCSVFromTrades } from './htmlToCsvConverter';
 
 interface CSVTradeRow {
   'Time': string;
@@ -560,63 +561,35 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         const csvContent = event.target.result as string;
         console.log('CSV Content preview:', csvContent.substring(0, 500));
         
-        const { headers, dataRows } = parseCSVContent(csvContent);
-        console.log(`Parsed ${dataRows.length} CSV rows with headers:`, headers);
-
-        if (dataRows.length === 0) {
-          throw new Error('No valid data rows found in CSV file');
-        }
-
-        // Parse all rows into trade history and complete trades
-        const tradeHistory: TradeHistoryItem[] = [];
-        const completeTrades: CompleteTrade[] = [];
-        let runningBalance = customInitialBalance; // Starting balance
-
-        dataRows.forEach((values, index) => {
-          const { openTrade, closeTrade, completeTrade } = parseCSVRow(values, headers, index);
-          
-          if (openTrade && closeTrade && completeTrade) {
-            // API data comes in UTC, adjust to GMT+3 to match CSV source timezone
-            // Add open trade
-            openTrade.balance = runningBalance.toFixed(2);
-            tradeHistory.push(openTrade);
-            
-            // Add close trade with updated balance
-            runningBalance += completeTrade.profit + completeTrade.commission + completeTrade.swap;
-            closeTrade.balance = runningBalance.toFixed(2);
-            tradeHistory.push(closeTrade);
-            
-            // Store complete trade for mark-to-market calculations
-            completeTrades.push(completeTrade);
-          }
+        console.log('Converting CSV to unified format...');
+        
+        // Convertir CSV a formato unificado
+        const convertedData = convertCSVToUnified(csvContent, csvTimezone, customInitialBalance);
+        
+        console.log('CSV converted to unified format:', {
+          symbol: convertedData.metadata.symbol,
+          totalTrades: convertedData.metadata.totalTrades,
+          tradesCount: convertedData.trades.length
         });
-
-        if (tradeHistory.length === 0) {
-          throw new Error('No valid trades found in CSV file. Please check the file format and ensure it contains the expected columns.');
-        }
-
-        console.log(`Successfully parsed ${tradeHistory.length} trade entries from ${completeTrades.length} complete trades`);
-
-        // Extract unique symbols
-        const availableSymbols = [...new Set(completeTrades.map(trade => trade.symbol))].sort();
-        const mainSymbol = availableSymbols[0] || 'UNKNOWN';
-
-        console.log('Available symbols:', availableSymbols);
-
-        // Calculate statistics for the main symbol
-        const mainSymbolTrades = completeTrades.filter(trade => trade.symbol === mainSymbol);
-        const profitableTrades = mainSymbolTrades.filter(trade => trade.profit > 0);
-        const totalProfit = mainSymbolTrades.reduce((sum, trade) => {
-          return sum + trade.profit + trade.commission + trade.swap;
-        }, 0);
+        
+        // Procesar usando la lógica existente pero con datos unificados
+        const tradeHistory = convertedData.trades;
+        const availableSymbols = [...new Set(tradeHistory.map(trade => trade.symbol))].sort();
+        const mainSymbol = convertedData.metadata.symbol;
+        
+        // Calcular estadísticas
+        const mainSymbolTrades = tradeHistory.filter(trade => 
+          trade.symbol === mainSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
+        );
+        const profitableTrades = mainSymbolTrades.filter(trade => parseFloat(trade.profit) > 0);
         const winRate = mainSymbolTrades.length > 0
           ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2)
           : '0.00';
-
-        // Calculate max drawdown (simplified)
-        let simplifiedMaxDrawdown = 0;
-        let peak = 10000;
-        let currentBalance = 10000;
+        
+        // Calcular max drawdown
+        let maxDrawdown = 0;
+        let peak = customInitialBalance;
+        let currentBalance = customInitialBalance;
 
         for (const trade of tradeHistory) {
           currentBalance = parseFloat(trade.balance);
@@ -624,49 +597,39 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
             peak = currentBalance;
           }
           const drawdown = ((peak - currentBalance) / peak) * 100;
-          if (drawdown > simplifiedMaxDrawdown) {
-            simplifiedMaxDrawdown = drawdown;
+          if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
           }
         }
-
-        // Generate mark-to-market data using the complete trades and API calls
-        console.log('Generating mark-to-market data with API calls using entry times...');
         
+        // Generar mark-to-market data
+        console.log('Generating mark-to-market data...');
+        const completeTrades = convertTradesForMarkToMarket(tradeHistory);
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
-
-        // Calculate final max drawdown
-        let finalMaxDrawdown = simplifiedMaxDrawdown;
         
-        // If we have mark-to-market data, calculate more accurate max drawdown
-        if (markToMarketData && markToMarketData.length > 0) {
-          const drawdownValues = markToMarketData
-            .map(item => parseFloat(item.currentDrawdown?.replace('%', '') || '0'))
-            .filter(value => !isNaN(value));
-          
-          if (drawdownValues.length > 0) {
-            finalMaxDrawdown = Math.max(...drawdownValues);
-          }
-        }
-
         const backtestData: BacktestData = {
           currencyPair: mainSymbol,
-          totalTrades: mainSymbolTrades.length,
-          totalProfit: totalProfit.toFixed(2),
-          winRate: winRate,
-          maxDrawdown: finalMaxDrawdown.toFixed(2),
+          expertName: convertedData.metadata.expertName,
+          totalTrades: Math.floor(mainSymbolTrades.length / 2).toString(), // Dividir por 2 porque tenemos in/out
+          totalProfit: `$${convertedData.metadata.totalNetProfit}`,
+          winRate: `${winRate}%`,
+          maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
           tradeHistory: tradeHistory,
           markToMarketData: markToMarketData,
           availableSymbols: availableSymbols,
-          initialBalance: customInitialBalance
+          initialBalance: customInitialBalance,
+          chartData: []
         };
         
-        console.log('Backtest data summary:', {
+        // Agregar el CSV unificado para descarga
+        (backtestData as any).unifiedCSV = convertedData.csvContent;
+        
+        console.log('Backtest data processed:', {
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
           totalProfit: backtestData.totalProfit,
           availableSymbols: backtestData.availableSymbols,
-          markToMarketDataPoints: markToMarketData.length,
-          completeTradesCount: completeTrades.length
+          markToMarketDataPoints: markToMarketData.length
         });
 
         resolve(backtestData);
@@ -680,4 +643,38 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
     reader.onerror = () => reject(new Error('Failed to read CSV file'));
     reader.readAsText(file);
   });
+};
+
+// Función auxiliar para convertir trades a formato para mark-to-market
+const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
+  const completeTrades: CompleteTrade[] = [];
+  const openTrades = new Map<string, TradeHistoryItem>();
+  
+  for (const trade of trades) {
+    if (trade.direction.toLowerCase() === 'in') {
+      openTrades.set(trade.order, trade);
+    } else if (trade.direction.toLowerCase() === 'out') {
+      const openTrade = openTrades.get(trade.order);
+      if (openTrade) {
+        completeTrades.push({
+          position: trade.order,
+          symbol: trade.symbol,
+          type: trade.type,
+          volume: parseFloat(trade.volume),
+          openTime: new Date(openTrade.time),
+          closeTime: new Date(trade.time),
+          openPrice: parseFloat(openTrade.price),
+          closePrice: parseFloat(trade.price),
+          commission: parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0'),
+          swap: parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0'),
+          profit: parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'),
+          stopLoss: '',
+          takeProfit: ''
+        });
+        openTrades.delete(trade.order);
+      }
+    }
+  }
+  
+  return completeTrades;
 };
