@@ -244,7 +244,7 @@ const processPositionsData = (
       
       // Crear trades individuales para el array
       const openTrade: TradeHistoryItem = {
-        time: parseXLSXDateTime(openTime),
+        time: formatXLSXDateTimeToISO(openTime),
         deal: position,
         symbol: symbol,
         type: type.toLowerCase(),
@@ -270,7 +270,7 @@ const processPositionsData = (
       runningBalance += parsedProfit + parsedCommission + parsedSwap;
       
       const closeTrade: TradeHistoryItem = {
-        time: parseXLSXDateTime(closeTime),
+        time: formatXLSXDateTimeToISO(closeTime),
         deal: position,
         symbol: symbol,
         type: type.toLowerCase(),
@@ -304,15 +304,15 @@ const processPositionsData = (
 };
 
 /**
- * Parsea fecha/hora del XLSX
+ * Convierte fecha/hora del XLSX a ISO string sin conversión de timezone
  */
-const parseXLSXDateTime = (dateStr: string): string => {
+const formatXLSXDateTimeToISO = (dateStr: string): string => {
   try {
     if (!dateStr || dateStr.trim() === '') {
       throw new Error(`Invalid date format: ${dateStr}`);
     }
     
-    // Formato esperado: 2025.06.16 15:00:00 - preservar tiempo exacto sin conversión
+    // Formato esperado: 2025.06.16 15:00:00 - preservar tiempo exacto
     const [datePart, timePart] = dateStr.trim().split(' ');
     if (!datePart || !timePart) {
       throw new Error(`Invalid date format: ${dateStr}`);
@@ -325,18 +325,17 @@ const parseXLSXDateTime = (dateStr: string): string => {
       throw new Error(`Missing date components: ${dateStr}`);
     }
     
-    // Crear ISO string directamente sin usar Date constructor para evitar timezone del navegador
+    // Crear ISO string directamente preservando el tiempo original
     const paddedMonth = month.padStart(2, '0');
     const paddedDay = day.padStart(2, '0');
     const paddedHours = hours.padStart(2, '0');
     const paddedMinutes = minutes.padStart(2, '0');
     const paddedSeconds = seconds.padStart(2, '0');
     
-    // IMPORTANTE: Usar 'Z' al final indica UTC, pero el tiempo ya está en el timezone correcto
-    // No aplicamos ninguna conversión, solo formateamos
+    // IMPORTANTE: Preservar el tiempo exacto del XLSX sin conversión
     const isoString = `${year}-${paddedMonth}-${paddedDay}T${paddedHours}:${paddedMinutes}:${paddedSeconds}.000Z`;
     
-    console.log(`XLSX time ${dateStr} -> ${isoString}`);
+    console.log(`XLSX time preserved: ${dateStr} -> ${isoString}`);
     return isoString;
   } catch (error) {
     console.error('XLSX Date parsing error:', error);

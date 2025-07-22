@@ -56,7 +56,8 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
       }
 
       try {
-        const validTime = parseMTDateTime(timeStr);
+        // Validar formato de fecha pero mantener string original
+        validateMTDateTime(timeStr);
         const deal = cells[1].textContent?.trim() || '';
         const symbolCell = cells[2].textContent?.trim() || '';
         const direction = cells[4].textContent?.trim() || '';
@@ -70,7 +71,7 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
         const comment = cells[12].textContent?.trim() || '';
 
         const tradeData = {
-          time: validTime,
+          time: timeStr, // Mantener el string original
           deal,
           symbol: symbolCell || symbol, // Usar symbol por defecto si está vacío
           type,
@@ -105,7 +106,7 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
             
             // Crear fila CSV para trade completo
             const csvRow = [
-              formatDateForCSV(openTrade.time), // Entry time
+              formatDateForCSVDirect(openTrade.time), // Entry time
               openTrade.order, // Position
               openTrade.symbol, // Symbol
               openTrade.type, // Type
@@ -113,7 +114,7 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
               openTrade.price, // Entry price
               '', // S/L (vacío por ahora)
               '', // T/P (vacío por ahora)
-              formatDateForCSV(validTime), // Exit time
+              formatDateForCSVDirect(timeStr), // Exit time
               price, // Exit price
               commission, // Commission
               swap, // Swap
@@ -124,7 +125,7 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
             
             // Crear trades individuales para el array de trades
             const openTradeItem: TradeHistoryItem = {
-              time: openTrade.time,
+              time: formatMTDateTimeToISO(openTrade.time),
               deal: openTrade.deal,
               symbol: openTrade.symbol,
               type: openTrade.type,
@@ -145,7 +146,7 @@ export const convertHtmlToCSV = (htmlContent: string, csvTimezone: number = 0, c
             };
             
             const closeTradeItem: TradeHistoryItem = {
-              time: validTime,
+              time: formatMTDateTimeToISO(timeStr),
               deal,
               symbol: symbolCell || symbol,
               type,
@@ -424,7 +425,28 @@ export const generateCSVFromTrades = (trades: TradeHistoryItem[], metadata: any)
 };
 
 // Funciones auxiliares
-const parseMTDateTime = (dateStr: string): string => {
+/**
+ * Valida formato de fecha MT sin convertir
+ */
+const validateMTDateTime = (dateStr: string): void => {
+  if (!dateStr || dateStr.trim() === 'Time') {
+    throw new Error(`Invalid date format: ${dateStr}`);
+  }
+
+  const [datePart, timePart] = dateStr.trim().split(' ');
+  if (!datePart || !timePart) {
+    throw new Error(`Invalid date format: ${dateStr}`);
+  }
+
+  const [year, month, day] = datePart.split('.');
+  const [hours, minutes] = timePart.split(':');
+
+  if (!year || !month || !day || !hours || !minutes) {
+    throw new Error(`Missing date components: ${dateStr}`);
+  }
+};
+
+const formatMTDateTimeToISO = (dateStr: string): string => {
   try {
     if (!dateStr || dateStr.trim() === 'Time') {
       throw new Error(`Invalid date format: ${dateStr}`);
@@ -442,16 +464,17 @@ const parseMTDateTime = (dateStr: string): string => {
       throw new Error(`Missing date components: ${dateStr}`);
     }
 
-    // Crear ISO string directamente sin usar Date constructor para evitar timezone del navegador
+    // Crear ISO string directamente preservando el tiempo original
     const paddedMonth = month.padStart(2, '0');
     const paddedDay = day.padStart(2, '0');
     const paddedHours = hours.padStart(2, '0');
     const paddedMinutes = minutes.padStart(2, '0');
     const paddedSeconds = seconds.padStart(2, '0');
     
-    // IMPORTANTE: Preservar el tiempo exacto del HTML sin conversión
+    // IMPORTANTE: Preservar el tiempo exacto sin conversión de timezone
     const isoString = `${year}-${paddedMonth}-${paddedDay}T${paddedHours}:${paddedMinutes}:${paddedSeconds}.000Z`;
     
+    console.log(`HTML time preserved: ${dateStr} -> ${isoString}`);
     return isoString;
   } catch (error) {
     console.error('HTML Date parsing error:', error);
