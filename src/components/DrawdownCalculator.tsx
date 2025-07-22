@@ -36,6 +36,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
   markToMarketData = []
 }) => {
   const [thresholdPercent, setThresholdPercent] = useState<number>(5);
+  const [tempThreshold, setTempThreshold] = useState<string>('5');
   const [filterType, setFilterType] = useState<'all' | 'buy' | 'sell'>('all');
   const [minAmount, setMinAmount] = useState<number>(0);
   const [maxAmount, setMaxAmount] = useState<number>(0);
@@ -377,6 +378,22 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     setExpandedRows(new Set());
   };
 
+  const handleThresholdChange = () => {
+    const newThreshold = parseFloat(tempThreshold);
+    if (!isNaN(newThreshold) && newThreshold >= 0 && newThreshold <= 100) {
+      setThresholdPercent(newThreshold);
+    } else {
+      // Reset to current value if invalid
+      setTempThreshold(thresholdPercent.toString());
+    }
+  };
+
+  const handleThresholdKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleThresholdChange();
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toISOString().replace('T', ' ').slice(0, 16);
@@ -436,15 +453,28 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Threshold (%)
           </label>
-          <input
-            type="number"
-            value={thresholdPercent}
-            onChange={(e) => setThresholdPercent(Number(e.target.value))}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-            min="0"
-            max="100"
-            step="0.1"
-          />
+          <div className="flex space-x-2">
+            <input
+              type="number"
+              value={tempThreshold}
+              onChange={(e) => setTempThreshold(e.target.value)}
+              onKeyPress={handleThresholdKeyPress}
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+              min="0"
+              max="100"
+              step="0.1"
+              placeholder="Enter threshold %"
+            />
+            <button
+              onClick={handleThresholdChange}
+              className="px-3 py-2 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition-colors"
+            >
+              OK
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            Current: {thresholdPercent}% (Press Enter or click OK to apply)
+          </div>
         </div>
 
         <div>
