@@ -225,7 +225,7 @@ const processPositionsData = (
       
       // Crear fila CSV
       const csvRow = [
-        formatDateForCSVDirect(openTime),
+        formatDateForCSV(openTime),
         position,
         symbol,
         type.toLowerCase(),
@@ -233,7 +233,7 @@ const processPositionsData = (
         cleanNumericValue(openPrice),
         stopLoss,
         takeProfit,
-        formatDateForCSVDirect(closeTime),
+        formatDateForCSV(closeTime),
         cleanNumericValue(closePrice),
         parsedCommission.toFixed(2),
         parsedSwap.toFixed(2),
@@ -346,33 +346,7 @@ const parseXLSXDateTime = (dateStr: string): string => {
 /**
  * Formatea fecha para CSV manteniendo el tiempo original
  */
-const formatDateForCSV = (isoString: string): string => {
-  try {
-    const date = new Date(isoString);
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const hours = String(date.getUTCHours()).padStart(2, '0');
-    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
-    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
-    
-    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
-  } catch (error) {
-    console.error('Error formatting date for CSV:', error);
-    // Fallback: extraer directamente del ISO string
-    const match = isoString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
-    if (match) {
-      const [, year, month, day, hours, minutes, seconds] = match;
-      return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
-    }
-    return isoString; // Último recurso
-  }
-};
-
-/**
- * Formatea fecha para CSV desde string original
- */
-const formatDateForCSVDirect = (dateStr: string): string => {
+const formatDateForCSV = (dateStr: string): string => {
   try {
     // Formato esperado: 2025.06.16 15:00:00
     const [datePart, timePart] = dateStr.trim().split(' ');
@@ -400,21 +374,6 @@ const formatDateForCSVDirect = (dateStr: string): string => {
     return dateStr; // Fallback to original
   }
 };
-      parseInt(year),
-      parseInt(month) - 1,
-      parseInt(day),
-      parseInt(hours),
-      parseInt(minutes),
-      parseInt(seconds)
-    );
-    
-    return date.toISOString();
-  } catch (error) {
-    console.error('XLSX Date parsing error:', error);
-    throw new Error(`Invalid time value: ${dateStr}`);
-  }
-};
-
 
 /**
  * Limpia valores numéricos
