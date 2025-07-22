@@ -4,6 +4,32 @@ import { MarkToMarketItem } from '../types';
 import { MarkToMarketVisualizer } from './MarkToMarketVisualizer';
 import { formatMarkToMarketValue, formatPrice, formatVolume } from '../utils/numberFormatter';
 
+// Helper function to format date without timezone conversion
+const formatDateForDisplay = (isoString: string): string => {
+  try {
+    // Extract date components directly from ISO string without creating Date object
+    const match = isoString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match;
+      return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+    }
+    
+    // Fallback: use UTC methods to avoid timezone conversion
+    const date = new Date(isoString);
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const year = date.getUTCFullYear();
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('Error formatting date for display:', error);
+    return isoString;
+  }
+};
+
 interface MarkToMarketAnalyticsProps {
   data: MarkToMarketItem[];
   selectedSymbol?: string;
@@ -341,7 +367,7 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
                                           </td>
                                           <td className="px-4 py-2 text-sm text-gray-900">{trade.volume.toFixed(2)}</td>
                                           <td className="px-4 py-2 text-sm text-gray-900">
-                                            {new Date(trade.entryTime).toLocaleString()}
+                                            {formatDateForDisplay(trade.entryTime)}
                                           </td>
                                           <td className="px-4 py-2 text-sm text-gray-900">
                                             ${trade.entryPrice.toFixed(5)}
