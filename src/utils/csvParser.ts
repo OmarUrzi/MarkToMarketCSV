@@ -63,14 +63,14 @@ const parseCSVDateTime = (dateStr: string): string => {
       throw new Error(`Missing date components: ${dateStr}`);
     }
 
-    // Create ISO string directly to avoid timezone conversion
-    // This preserves the exact time from CSV without browser timezone interference
+    // Crear ISO string directamente sin usar Date constructor para evitar timezone del navegador
     const paddedMonth = month.padStart(2, '0');
     const paddedDay = day.padStart(2, '0');
     const paddedHours = hours.padStart(2, '0');
     const paddedMinutes = minutes.padStart(2, '0');
     const paddedSeconds = seconds.padStart(2, '0');
     
+    // IMPORTANTE: Preservar el tiempo exacto del CSV sin conversión
     const isoString = `${year}-${paddedMonth}-${paddedDay}T${paddedHours}:${paddedMinutes}:${paddedSeconds}.000Z`;
     console.log(`CSV time ${dateStr} -> ${isoString}`);
     return isoString;
