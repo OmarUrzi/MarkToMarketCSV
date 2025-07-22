@@ -23,7 +23,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [uploadType, setUploadType] = useState<'html' | 'csv'>('csv');
+  const [uploadType, setUploadType] = useState<'html' | 'csv' | 'xlsx'>('csv');
   
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -61,13 +61,15 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   }, [onFileUpload]);
 
   const getAcceptedFileTypes = () => {
-    return uploadType === 'html' ? '.html,.htm' : '.csv';
+    if (uploadType === 'html') return '.html,.htm';
+    if (uploadType === 'xlsx') return '.xlsx,.xls';
+    return '.csv';
   };
 
   const getFileDescription = () => {
-    return uploadType === 'html' 
-      ? 'MT4/MT5 Backtest HTML Report'
-      : 'CSV Backtest Data';
+    if (uploadType === 'html') return 'MT4/MT5 Backtest HTML Report';
+    if (uploadType === 'xlsx') return 'Excel Trade History Report';
+    return 'CSV Backtest Data';
   };
 
   return (
@@ -121,7 +123,7 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
       </div>
       {/* Upload Type Selection */}
       <div className="mb-6 flex justify-center">
-        <div className="bg-gray-100 p-1 rounded-lg flex">
+        <div className="bg-gray-100 p-1 rounded-lg flex space-x-1">
           <button
             onClick={() => setUploadType('html')}
             className={`
@@ -146,6 +148,18 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
             <Table className="h-4 w-4 mr-2" />
             CSV Data
           </button>
+          <button
+            onClick={() => setUploadType('xlsx')}
+            className={`
+              flex items-center px-4 py-2 rounded-md text-sm font-medium transition-all duration-200
+              ${uploadType === 'xlsx' 
+                ? 'bg-white text-blue-600 shadow-sm' 
+                : 'text-gray-600 hover:text-gray-800'}
+            `}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Excel Report
+          </button>
         </div>
       </div>
 
@@ -168,12 +182,16 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
           ) : (
             <div className={`
               p-3 rounded-full mb-4
-              ${uploadType === 'html' ? 'bg-blue-100' : 'bg-green-100'}
+              ${uploadType === 'html' ? 'bg-blue-100' : uploadType === 'xlsx' ? 'bg-purple-100' : 'bg-green-100'}
             `}>
-              {uploadType === 'html' ? (
+              {uploadType === 'html' && (
                 <FileText className={`h-6 w-6 ${isDragging ? 'text-blue-600' : 'text-blue-500'}`} />
-              ) : (
+              )}
+              {uploadType === 'csv' && (
                 <Table className={`h-6 w-6 ${isDragging ? 'text-green-600' : 'text-green-500'}`} />
+              )}
+              {uploadType === 'xlsx' && (
+                <FileText className={`h-6 w-6 ${isDragging ? 'text-purple-600' : 'text-purple-500'}`} />
               )}
             </div>
           )}
@@ -206,6 +224,19 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                 <div><strong>Note:</strong> Two Time columns (entry and exit) and two Price columns (entry and exit)</div>
                 <div><strong>Position:</strong> Position ID or number</div>
                 <div><strong>Commission/Swap/Profit:</strong> Numeric values (can be negative)</div>
+              </div>
+            </div>
+          )}
+          
+          {uploadType === 'xlsx' && (
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg text-left text-sm text-gray-700 max-w-4xl">
+              <div className="font-semibold mb-3 text-gray-900">Expected XLSX Structure:</div>
+              <div className="space-y-2 text-xs text-gray-600">
+                <div><strong>Required Section:</strong> "Positions" with trade data</div>
+                <div><strong>Date Format:</strong> YYYY.MM.DD HH:MM:SS (e.g., 2025.06.16 15:00:00)</div>
+                <div><strong>Columns:</strong> Time, Position, Symbol, Type, Volume, Price, S/L, T/P, Time, Price, Commission, Swap, Profit</div>
+                <div><strong>Note:</strong> The system will automatically extract data from the "Positions" section</div>
+                <div><strong>Metadata:</strong> Account name, number, and company info will be extracted from the header</div>
               </div>
             </div>
           )}

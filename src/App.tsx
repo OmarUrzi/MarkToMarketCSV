@@ -10,6 +10,7 @@ import { MarkToMarketAnalytics } from './components/MarkToMarketAnalytics';
 import { BacktestData } from './types';
 import { parseHtmlFile, fetchMarkToMarketForSymbol } from './utils/parsers';
 import { parseCSVFile } from './utils/csvParser';
+import { convertXlsxToCSV } from './utils/xlsxToCsvConverter';
 import { mockBacktestData } from './data/mockData';
 import { TimezoneSelector } from './components/TimezoneSelector';
 
@@ -39,14 +40,31 @@ function App() {
       const fileName = file.name.toLowerCase();
       let data: BacktestData;
 
-      if (fileName.endsWith('.csv')) {
+      if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+        // Handle XLSX file
+        const xlsxData = await convertXlsxToCSV(file, timezone, initialAmount);
+        
+        // Create a virtual CSV file and use the existing CSV parser
+        const csvBlob = new Blob([xlsxData.csvContent], { type: 'text/csv' });
+        const csvFile = new File([csvBlob], 'converted.csv', { type: 'text/csv' });
+        
+        data = await parseCSVFile(csvFile, timezone, initialAmount);
+        
+        // Update metadata with XLSX information
+        data.expertName = xlsxData.metadata.expertName;
+        data.totalProfit = `$${xlsxData.metadata.totalNetProfit}`;
+        
+        // Add the converted CSV as property for download
+        (data as any).convertedCSV = xlsxData.csvContent;
+        
+      } else if (fileName.endsWith('.csv')) {
         // Handle CSV file
         data = await parseCSVFile(file, timezone, initialAmount);
       } else if (fileName.endsWith('.htm') || fileName.endsWith('.html')) {
         // Handle HTML file
         data = await parseHtmlFile(file, timezone, initialAmount);
       } else {
-        throw new Error('Please upload either an HTML file (.html/.htm) from MT4/MT5 backtest report or a CSV file (.csv) with trade data');
+        throw new Error('Please upload either an HTML file (.html/.htm) from MT4/MT5 backtest report, a CSV file (.csv) with trade data, or an Excel file (.xlsx/.xls) with trade history');
       }
 
       if (!data) {
