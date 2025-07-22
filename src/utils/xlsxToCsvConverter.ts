@@ -225,7 +225,7 @@ const processPositionsData = (
       
       // Crear fila CSV
       const csvRow = [
-        formatDateForCSV(openTime),
+        formatDateForCSVDirect(openTime),
         position,
         symbol,
         type.toLowerCase(),
@@ -233,7 +233,7 @@ const processPositionsData = (
         cleanNumericValue(openPrice),
         stopLoss,
         takeProfit,
-        formatDateForCSV(closeTime),
+        formatDateForCSVDirect(closeTime),
         cleanNumericValue(closePrice),
         parsedCommission.toFixed(2),
         parsedSwap.toFixed(2),
@@ -312,6 +312,68 @@ const parseXLSXDateTime = (dateStr: string): string => {
       throw new Error(`Invalid date format: ${dateStr}`);
     }
     
+    // Formato esperado: 2025.06.16 15:00:00 - preservar tiempo exacto
+    const [datePart, timePart] = dateStr.trim().split(' ');
+    if (!datePart || !timePart) {
+      throw new Error(`Invalid date format: ${dateStr}`);
+    }
+    
+    const [year, month, day] = datePart.split('.');
+    const [hours, minutes, seconds = '00'] = timePart.split(':');
+    
+    if (!year || !month || !day || !hours || !minutes) {
+      throw new Error(`Missing date components: ${dateStr}`);
+    }
+    
+    // Crear fecha preservando el tiempo exacto del XLSX sin conversión de timezone
+    const paddedMonth = month.padStart(2, '0');
+    const paddedDay = day.padStart(2, '0');
+    const paddedHours = hours.padStart(2, '0');
+    const paddedMinutes = minutes.padStart(2, '0');
+    const paddedSeconds = seconds.padStart(2, '0');
+    
+    // Crear ISO string directamente para evitar conversión de timezone del navegador
+    const isoString = `${year}-${paddedMonth}-${paddedDay}T${paddedHours}:${paddedMinutes}:${paddedSeconds}.000Z`;
+    
+    console.log(`XLSX time ${dateStr} -> ${isoString}`);
+    return isoString;
+  } catch (error) {
+    console.error('XLSX Date parsing error:', error);
+    throw new Error(`Invalid time value: ${dateStr}`);
+  }
+};
+
+/**
+ * Formatea fecha para CSV manteniendo el tiempo original
+ */
+const formatDateForCSV = (isoString: string): string => {
+  try {
+    const date = new Date(isoString);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('Error formatting date for CSV:', error);
+    // Fallback: extraer directamente del ISO string
+    const match = isoString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match;
+      return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+    }
+    return isoString; // Último recurso
+  }
+};
+
+/**
+ * Formatea fecha para CSV desde string original
+ */
+const formatDateForCSVDirect = (dateStr: string): string => {
+  try {
     // Formato esperado: 2025.06.16 15:00:00
     const [datePart, timePart] = dateStr.trim().split(' ');
     if (!datePart || !timePart) {
@@ -325,7 +387,19 @@ const parseXLSXDateTime = (dateStr: string): string => {
       throw new Error(`Missing date components: ${dateStr}`);
     }
     
-    const date = new Date(
+    // Formatear directamente sin conversión
+    const paddedMonth = month.padStart(2, '0');
+    const paddedDay = day.padStart(2, '0');
+    const paddedHours = hours.padStart(2, '0');
+    const paddedMinutes = minutes.padStart(2, '0');
+    const paddedSeconds = seconds.padStart(2, '0');
+    
+    return `${year}.${paddedMonth}.${paddedDay} ${paddedHours}:${paddedMinutes}:${paddedSeconds}`;
+  } catch (error) {
+    console.error('Error formatting date for CSV direct:', error);
+    return dateStr; // Fallback to original
+  }
+};
       parseInt(year),
       parseInt(month) - 1,
       parseInt(day),
@@ -341,25 +415,6 @@ const parseXLSXDateTime = (dateStr: string): string => {
   }
 };
 
-/**
- * Formatea fecha para CSV
- */
-const formatDateForCSV = (dateStr: string): string => {
-  try {
-    const date = new Date(parseXLSXDateTime(dateStr));
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    
-    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
-  } catch (error) {
-    console.error('Error formatting date for CSV:', error);
-    return dateStr; // Fallback to original
-  }
-};
 
 /**
  * Limpia valores numéricos
