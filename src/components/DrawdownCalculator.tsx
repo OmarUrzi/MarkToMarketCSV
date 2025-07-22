@@ -667,7 +667,10 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                         <div>
                           <div className="text-green-600 font-medium">Recovered</div>
                           <div className="text-xs text-gray-500">
-                            {event.recoveryDuration?.toFixed(1)}h
+                            {formatDate(event.recoveryDate)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Duration: {event.recoveryDuration?.toFixed(1)}h
                           </div>
                         </div>
                       ) : (
