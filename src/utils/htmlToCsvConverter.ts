@@ -452,6 +452,9 @@ const parseMTDateTime = (dateStr: string): string => {
     // IMPORTANTE: Preservar el tiempo exacto del HTML sin conversión
     const isoString = `${year}-${paddedMonth}-${paddedDay}T${paddedHours}:${paddedMinutes}:${paddedSeconds}.000Z`;
     
+    return isoString;
+  } catch (error) {
+    console.error('HTML Date parsing error:', error);
     throw new Error(`Invalid time value: ${dateStr}`);
   }
 };
