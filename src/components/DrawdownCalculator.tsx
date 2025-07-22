@@ -81,8 +81,9 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           const lastEvent = events[events.length - 1];
           if (lastEvent) {
             lastEvent.recoveryDate = trade.time;
+            // Recovery duration is from drawdown START to full recovery
             lastEvent.recoveryDuration = 
-              (new Date(trade.time).getTime() - new Date(lastEvent.endDate).getTime()) / (1000 * 60 * 60);
+              (new Date(trade.time).getTime() - new Date(lastEvent.startDate).getTime()) / (1000 * 60 * 60);
           }
           inDrawdown = false;
           drawdownTrades = [];
@@ -195,8 +196,9 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           const lastEvent = events[events.length - 1];
           if (lastEvent) {
             lastEvent.recoveryDate = mtmItem.date;
+            // Recovery duration is from drawdown START to full recovery
             lastEvent.recoveryDuration = 
-              (new Date(mtmItem.date).getTime() - new Date(lastEvent.endDate).getTime()) / (1000 * 60 * 60);
+              (new Date(mtmItem.date).getTime() - new Date(lastEvent.startDate).getTime()) / (1000 * 60 * 60);
           }
           inDrawdown = false;
           drawdownTrades = [];
@@ -700,7 +702,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                             {formatDate(event.recoveryDate)}
                           </div>
                           <div className="text-xs text-gray-500">
-                            Duration: {event.recoveryDuration?.toFixed(1)}h
+                            Total Duration: {event.recoveryDuration?.toFixed(1)}h
                           </div>
                         </div>
                       ) : (
