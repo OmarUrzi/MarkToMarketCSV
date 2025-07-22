@@ -515,15 +515,28 @@ const parseCSVDateTime = (dateStr: string): string => {
 };
 
 const formatDateForCSV = (isoString: string): string => {
-  const date = new Date(isoString);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  const hours = String(date.getHours()).padStart(2, '0');
-  const minutes = String(date.getMinutes()).padStart(2, '0');
-  const seconds = String(date.getSeconds()).padStart(2, '0');
-  
-  return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+  try {
+    // Extraer directamente del ISO string sin crear objeto Date
+    const match = isoString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match;
+      return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+    }
+    
+    // Fallback: si no coincide el patrón, intentar con Date pero preservar UTC
+    const date = new Date(isoString);
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const hours = String(date.getUTCHours()).padStart(2, '0');
+    const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+    
+    return `${year}.${month}.${day} ${hours}:${minutes}:${seconds}`;
+  } catch (error) {
+    console.error('Error formatting date for CSV:', error);
+    return isoString; // Último recurso
+  }
 };
 
 const extractSymbolFromHTML = (doc: Document): string | null => {
