@@ -47,6 +47,10 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
 
   // Calculate realized drawdown events (closed trades only)
   const calculateRealizedDrawdownEvents = () => {
+    console.log('=== DRAWDOWN CALCULATOR CALCULATION ===');
+    console.log('Threshold:', thresholdPercent, '%');
+    console.log('Initial balance:', initialBalance);
+
     const events: DrawdownEvent[] = [];
     let peakBalance = initialBalance;
     let peakDate = '';
@@ -58,6 +62,8 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     const sortedTrades = [...trades]
       .filter(trade => parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0)
       .sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
+
+    console.log('Processing', sortedTrades.length, 'trades for calculator');
 
     let runningBalance = initialBalance;
 
@@ -73,8 +79,10 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
 
       // Update peak if current balance is higher
       if (runningBalance > peakBalance) {
+        const oldPeak = peakBalance;
         peakBalance = runningBalance;
         peakDate = trade.time;
+        console.log(`New peak at ${trade.time}: $${peakBalance.toFixed(2)} (was $${oldPeak.toFixed(2)})`);
         
         // If we were in drawdown and recovered, end the drawdown event
         if (inDrawdown) {
@@ -84,6 +92,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
             // Recovery duration is from drawdown START to full recovery
             lastEvent.recoveryDuration = 
               (new Date(trade.time).getTime() - new Date(lastEvent.startDate).getTime()) / (1000 * 60 * 60);
+            console.log(`Recovery completed at ${trade.time}, total duration: ${lastEvent.recoveryDuration.toFixed(1)}h`);
           }
           inDrawdown = false;
           drawdownTrades = [];
@@ -100,6 +109,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
         inDrawdown = true;
         drawdownStart = trade.time;
         drawdownTrades = [];
+        console.log(`Drawdown started at ${trade.time}: ${drawdownPercent.toFixed(2)}% (Balance: $${runningBalance.toFixed(2)}, Peak: $${peakBalance.toFixed(2)})`);
       }
 
       // If in drawdown, collect trades
@@ -134,6 +144,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           // Update existing event if this is a deeper drawdown
           const event = events[existingEventIndex];
           if (drawdownPercent > event.drawdownPercent) {
+            console.log(`Updating drawdown event: ${drawdownPercent.toFixed(2)}% at ${trade.time}`);
             event.endDate = trade.time;
             event.troughBalance = runningBalance;
             event.drawdownPercent = drawdownPercent;
@@ -144,6 +155,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           }
         } else {
           // Create new event
+          console.log(`Creating new drawdown event: ${drawdownPercent.toFixed(2)}% from ${drawdownStart} to ${trade.time}`);
           events.push({
             startDate: drawdownStart,
             endDate: trade.time,
@@ -159,6 +171,15 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       }
     }
 
+    console.log('=== DRAWDOWN CALCULATOR RESULTS ===');
+    console.log('Total events found:', events.length);
+    events.forEach((event, index) => {
+      console.log(`Event ${index + 1}: ${event.drawdownPercent.toFixed(2)}% from ${event.startDate} to ${event.endDate}`);
+      if (event.recoveryDate) {
+        console.log(`  Recovery: ${event.recoveryDate} (${event.recoveryDuration?.toFixed(1)}h total)`);
+      }
+    });
+    console.log('=== END DRAWDOWN CALCULATOR CALCULATION ===');
     return events;
   };
 

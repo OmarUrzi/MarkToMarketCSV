@@ -298,6 +298,9 @@ const calculateRealizedDrawdown = (
 ) => {
   if (trades.length === 0) return [];
 
+  console.log('=== DRAWDOWN CHART CALCULATION ===');
+  console.log('Initial balance:', initialBalance);
+
   const sortedTrades = [...trades].sort((a, b) => new Date(a.time).getTime() - new Date(b.time).getTime());
   
   let runningBalance = initialBalance;
@@ -307,6 +310,8 @@ const calculateRealizedDrawdown = (
   // Add initial drawdown
   const firstTradeTime = Math.floor(new Date(sortedTrades[0].time).getTime() / 1000);
   drawdownMap.set(firstTradeTime, 0);  
+
+  console.log('Processing', sortedTrades.length, 'trades for drawdown chart');
 
   for (const trade of sortedTrades) {
     // Calculate new balance
@@ -319,16 +324,22 @@ const calculateRealizedDrawdown = (
     // Update peak if current balance is higher
     if (runningBalance > peakBalance) {
       peakBalance = runningBalance;
+      console.log(`New peak at ${trade.time}: $${peakBalance.toFixed(2)}`);
     }
     
     // Calculate drawdown as percentage
     const drawdownPercent = peakBalance > 0 ? 
       ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
     
+    if (drawdownPercent > 5) {
+      console.log(`Significant drawdown at ${trade.time}: ${drawdownPercent.toFixed(2)}% (Balance: $${runningBalance.toFixed(2)}, Peak: $${peakBalance.toFixed(2)})`);
+    }
+
     const timeInSeconds = Math.floor(new Date(trade.time).getTime() / 1000);
     drawdownMap.set(timeInSeconds, -drawdownPercent); // Negative for display
   }
 
+  console.log('=== END DRAWDOWN CHART CALCULATION ===');
   return Array.from(drawdownMap.entries())
     .map(([time, drawdown]) => ({ time, drawdown }))
     .sort((a, b) => a.time - b.time);
