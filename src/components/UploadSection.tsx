@@ -24,6 +24,8 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadType, setUploadType] = useState<'html' | 'csv' | 'xlsx'>('csv');
+  const [displayAmount, setDisplayAmount] = useState<string>(initialAmount.toLocaleString('en-US'));
+  const [isEditing, setIsEditing] = useState(false);
   
   const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -60,6 +62,68 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
     }
   }, [onFileUpload]);
 
+  // Handle initial amount formatting
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    // Remove all non-digit characters for processing
+    const numericValue = value.replace(/[^\d]/g, '');
+    
+    if (numericValue === '') {
+      setDisplayAmount('');
+      return;
+    }
+    
+    const numberValue = parseInt(numericValue);
+    if (!isNaN(numberValue)) {
+      if (isEditing) {
+        // While editing, show clean number
+        setDisplayAmount(numericValue);
+      } else {
+        // When not editing, show formatted number
+        setDisplayAmount(numberValue.toLocaleString('en-US'));
+      }
+    }
+  };
+
+  const handleAmountFocus = () => {
+    setIsEditing(true);
+    // Show clean number for easy editing
+    const cleanValue = displayAmount.replace(/[^\d]/g, '');
+    setDisplayAmount(cleanValue);
+  };
+
+  const handleAmountBlur = () => {
+    setIsEditing(false);
+    const cleanValue = displayAmount.replace(/[^\d]/g, '');
+    
+    if (cleanValue === '') {
+      setDisplayAmount('0');
+      onInitialAmountChange(0);
+      return;
+    }
+    
+    const numberValue = parseInt(cleanValue);
+    if (!isNaN(numberValue)) {
+      setDisplayAmount(numberValue.toLocaleString('en-US'));
+      onInitialAmountChange(numberValue);
+    } else {
+      // Reset to current value if invalid
+      setDisplayAmount(initialAmount.toLocaleString('en-US'));
+    }
+  };
+
+  const handleAmountKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      (e.target as HTMLInputElement).blur();
+    }
+  };
+
+  // Update display when initialAmount prop changes
+  React.useEffect(() => {
+    if (!isEditing) {
+      setDisplayAmount(initialAmount.toLocaleString('en-US'));
+    }
+  }, [initialAmount, isEditing]);
   const getAcceptedFileTypes = () => {
     if (uploadType === 'html') return '.html,.htm';
     if (uploadType === 'xlsx') return '.xlsx,.xls';
@@ -105,17 +169,24 @@ export const UploadSection: React.FC<UploadSectionProps> = ({
                 <span className="text-sm text-blue-700 font-medium">$</span>
                 <input
                   type="number"
-                  value={initialAmount}
-                  onChange={(e) => onInitialAmountChange(Number(e.target.value))}
+                  value={displayAmount}
+                  onChange={handleAmountChange}
+                  onFocus={handleAmountFocus}
+                  onBlur={handleAmountBlur}
+                  onKeyPress={handleAmountKeyPress}
                   disabled={isLoading}
                   className={`
                     px-3 py-2 border border-blue-300 rounded-md text-sm bg-white min-w-[120px]
                     focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
                     ${isLoading ? 'opacity-50 cursor-not-allowed bg-gray-100' : 'cursor-text hover:border-blue-400'}
                   `}
-                  min="0"
-                  step="1000"
+                  placeholder="10,000"
                 />
+              </div>
+            </div>
+            <div className="flex justify-end mt-1">
+              <div className="text-xs text-blue-600">
+                {isEditing ? 'Type number and press Enter or click outside' : `Current: $${initialAmount.toLocaleString('en-US')}`}
               </div>
             </div>
           </div>
