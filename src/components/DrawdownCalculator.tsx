@@ -587,6 +587,16 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       {/* Statistics */}
       {statistics && (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="col-span-full mb-2">
+            <div className="text-sm text-gray-600 bg-white p-3 rounded border">
+              <strong>Debug Info:</strong> Threshold: {thresholdPercent}% | 
+              Initial Balance: ${initialBalance.toLocaleString()} | 
+              Trades: {trades.length} | 
+              Mode: {drawdownMode}
+              <br />
+              <em>Check browser console for detailed calculation logs</em>
+            </div>
+          </div>
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">{statistics.totalEvents}</div>
             <div className="text-xs text-gray-600">Total Events</div>
