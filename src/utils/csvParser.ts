@@ -263,6 +263,14 @@ const parseCSVContent = (csvContent: string): { headers: string[], dataRows: str
 
 const fetchMarketData = async (symbol: string, fromDate: string, toDate: string): Promise<MarketDataPoint[]> => {
   try {
+    console.log('=== CSV PARSER MARKET DATA API CALL START ===');
+    console.log('CSV Parser API request:', {
+      symbol,
+      fromDate,
+      toDate,
+      caller: 'csvParser.fetchMarketData'
+    });
+
     const fromDateObj = new Date(fromDate);
     const toDateObj = new Date(toDate);
 
@@ -275,8 +283,8 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     
     const apiUrl = `https://test.neuix.host/api/market-data/get?from_date=${encodeURIComponent(formattedFromDate)}&to_date=${encodeURIComponent(formattedToDate)}&timeframe=M15&symbols=${encodeURIComponent(symbol)}`;
     
-    console.log('Making API call to:', apiUrl);
-    console.log('Request parameters:', { symbol, fromDate: formattedFromDate, toDate: formattedToDate });
+    console.log('CSV Parser Final API URL:', apiUrl);
+    console.log('CSV Parser API call timestamp:', new Date().toISOString());
 
     const response = await axios({
       method: 'get',
@@ -288,7 +296,16 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
       timeout: 30000
     });
 
+    console.log('CSV Parser API Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      dataType: typeof response.data,
+      dataLength: Array.isArray(response.data) ? response.data.length : 'not array',
+      timestamp: new Date().toISOString()
+    });
+
     if (!response.data) {
+      console.error('CSV Parser: No data in API response');
       throw new Error('No data received from API');
     }
 
@@ -296,25 +313,38 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     let marketDataPoints: MarketDataPoint[] = [];
     
     if (typeof response.data === 'string') {
+      console.log('CSV Parser: Parsing NDJSON response');
       marketDataPoints = parseNDJSON(response.data);
     } else if (Array.isArray(response.data)) {
+      console.log('CSV Parser: Using array response directly');
       marketDataPoints = response.data;
     } else if (response.data.data && typeof response.data.data === 'string') {
+      console.log('CSV Parser: Parsing nested NDJSON response');
       marketDataPoints = parseNDJSON(response.data.data);
     } else if (response.data.data && Array.isArray(response.data.data)) {
+      console.log('CSV Parser: Using nested array response');
       marketDataPoints = response.data.data;
     }
 
-    console.log(`Received ${marketDataPoints.length} market data points for ${symbol}`);
+    console.log(`CSV Parser: Received ${marketDataPoints.length} market data points for ${symbol}`);
+    if (marketDataPoints.length > 0) {
+      console.log('CSV Parser: First data point:', marketDataPoints[0]);
+      console.log('CSV Parser: Last data point:', marketDataPoints[marketDataPoints.length - 1]);
+    }
+    console.log('=== CSV PARSER MARKET DATA API CALL END ===');
+
     return marketDataPoints;
 
   } catch (error) {
-    console.error('API call failed:', {
+    console.error('=== CSV PARSER MARKET DATA API CALL FAILED ===');
+    console.error('CSV Parser API Error:', {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status,
-      headers: error.response?.headers
+      headers: error.response?.headers,
+      timestamp: new Date().toISOString()
     });
+    console.error('=== END CSV PARSER API CALL ERROR ===');
     throw error;
   }
 };

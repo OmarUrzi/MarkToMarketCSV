@@ -260,6 +260,16 @@ export const MarkToMarketVisualizer: React.FC<MarkToMarketVisualizerProps> = ({
       setError(null);
 
       try {
+        console.log('=== VISUALIZER API CALL START ===');
+        console.log('Visualizer API request:', {
+          symbol,
+          fromDate: selectedRange.start,
+          toDate: toDate.toISOString().split('T')[0],
+          timeframe: frequency,
+          selectedWeek,
+          csvTimezone
+        });
+
         const apiUrl = 'https://test.neuix.host/api/market-data/get';
         
         // Add one day to the end date to ensure we get the full period
@@ -273,6 +283,10 @@ export const MarkToMarketVisualizer: React.FC<MarkToMarketVisualizerProps> = ({
           symbols: symbol
         };
 
+        console.log('Visualizer API URL:', apiUrl);
+        console.log('Visualizer API params:', params);
+        console.log('Visualizer API call timestamp:', new Date().toISOString());
+
         const response = await axios.get(apiUrl, {
           params,
           headers: {
@@ -280,26 +294,45 @@ export const MarkToMarketVisualizer: React.FC<MarkToMarketVisualizerProps> = ({
           }
         });
 
+        console.log('Visualizer API Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          dataType: typeof response.data,
+          dataLength: Array.isArray(response.data) ? response.data.length : 'not array',
+          timestamp: new Date().toISOString()
+        });
+
         if (!response.data) {
+          console.error('Visualizer: No data in API response');
           throw new Error('No data received from API');
         }
 
         let parsedData: any[] = [];
         
         if (typeof response.data === 'string') {
+          console.log('Visualizer: Parsing NDJSON response');
           parsedData = parseNDJSON(response.data);
         } else if (response.data.data && typeof response.data.data === 'string') {
+          console.log('Visualizer: Parsing nested NDJSON response');
           parsedData = parseNDJSON(response.data.data);
         } else if (Array.isArray(response.data)) {
+          console.log('Visualizer: Using array response directly');
           parsedData = response.data;
         } else {
+          console.error('Visualizer: Unexpected response format:', typeof response.data);
           throw new Error('Unexpected response format');
+        }
+
+        console.log(`Visualizer: Parsed ${parsedData.length} data points`);
+        if (parsedData.length > 0) {
+          console.log('Visualizer: First parsed point:', parsedData[0]);
+          console.log('Visualizer: Last parsed point:', parsedData[parsedData.length - 1]);
         }
 
         // Process API data to match CSV timezone and filter from first trade time
         if (data.length > 0) {
           const firstTradeTime = new Date(data[0].date);
-          console.log(`First trade time in visualizer: ${firstTradeTime.toISOString()}`);
+          console.log(`Visualizer: First trade time: ${firstTradeTime.toISOString()}`);
           
           // Adjust API timestamps to match CSV timezone
           parsedData = parsedData
@@ -312,9 +345,9 @@ export const MarkToMarketVisualizer: React.FC<MarkToMarketVisualizerProps> = ({
               return itemTime >= firstTradeTime;
             });
             
-          console.log(`Filtered API data points: ${parsedData.length}`);
+          console.log(`Visualizer: Filtered API data points: ${parsedData.length}`);
           if (parsedData.length > 0) {
-            console.log(`First API data point after adjustment: ${parsedData[0].time}`);
+            console.log(`Visualizer: First API data point after adjustment: ${parsedData[0].time}`);
           }
         }
         
@@ -323,14 +356,21 @@ export const MarkToMarketVisualizer: React.FC<MarkToMarketVisualizerProps> = ({
           calculateMetrics(item, index > 0 ? parsedData[index - 1] : null)
         );
 
+        console.log(`Visualizer: Processed ${processedData.length} market data items`);
         setMarketData(processedData);
         setChartData(parsedData);
+        console.log('=== VISUALIZER API CALL END ===');
       } catch (err: any) {
-        console.error('Market data fetch error:', {
+        console.error('=== VISUALIZER API CALL FAILED ===');
+        console.error('Visualizer API Error:', {
           error: err,
           message: err.message,
-          response: err.response?.data
+          response: err.response?.data,
+          status: err.response?.status,
+          config: err.config,
+          timestamp: new Date().toISOString()
         });
+        console.error('=== END VISUALIZER API CALL ERROR ===');
         
         const errorMessage = err.response?.data?.error?.message || 
                            err.response?.data?.error || 

@@ -235,6 +235,15 @@ const parseMarketData = (data: string, trades: TradeHistoryItem[], initialBalanc
 
 const fetchMarketData = async (symbol: string, fromDate: string, toDate: string) => {
   try {
+    console.log('=== MARKET DATA API CALL START ===');
+    console.log('Request parameters:', {
+      symbol,
+      fromDate,
+      toDate,
+      originalFromDate: fromDate,
+      originalToDate: toDate
+    });
+
     // Convert CSV dates to UTC for API request
     const fromDateObj = new Date(fromDate);
     const toDateObj = new Date(toDate);
@@ -248,13 +257,8 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     
     const apiUrl = `https://test.neuix.host/api/market-data/get?from_date=${encodeURIComponent(formattedFromDate)}&to_date=${encodeURIComponent(formattedToDate)}&timeframe=M15&symbols=${encodeURIComponent(symbol)}`;
     
-    console.log('Making API call for market data:', {
-      symbol,
-      fromDate: formattedFromDate,
-      toDate: formattedToDate,
-      originalFromDate: fromDate,
-      originalToDate: toDate
-    });
+    console.log('Final API URL:', apiUrl);
+    console.log('API call timestamp:', new Date().toISOString());
 
     const response = await axios({
       method: 'get',
@@ -266,18 +270,39 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
       timeout: 30000
     });
 
+    console.log('API Response received:', {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      dataType: typeof response.data,
+      dataLength: Array.isArray(response.data) ? response.data.length : 'not array',
+      timestamp: new Date().toISOString()
+    });
+
     if (!response.data) {
+      console.error('No data in API response');
       throw new Error('No data received from API');
     }
 
+    console.log('Raw API response data preview:', 
+      typeof response.data === 'string' 
+        ? response.data.substring(0, 500) + '...'
+        : JSON.stringify(response.data).substring(0, 500) + '...'
+    );
+    console.log('=== MARKET DATA API CALL END ===');
+
     return response.data;
   } catch (error) {
-    console.error('API call failed:', {
+    console.error('=== MARKET DATA API CALL FAILED ===');
+    console.error('Error details:', {
       message: error.message,
       response: error.response?.data,
       status: error.response?.status,
-      headers: error.response?.headers
+      headers: error.response?.headers,
+      config: error.config,
+      timestamp: new Date().toISOString()
     });
+    console.error('=== END API CALL ERROR ===');
     throw error;
   }
 };
