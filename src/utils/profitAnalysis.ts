@@ -135,6 +135,7 @@ export const dataFlowSummary = `
 3. CLEAN PROFIT VALUES
    - Remove currency symbols: profit.replace(/[^\\d.-]/g, '')
    - Convert to numbers: parseFloat()
+   - Include commission and swap in total calculations
    ↓
 4. CALCULATE RUNNING BALANCE
    - Start with initialBalance
@@ -142,11 +143,11 @@ export const dataFlowSummary = `
    ↓
 5. FILTER BY SYMBOL
    - Show only trades for selected symbol
-   - Recalculate totals for that symbol
+   - Recalculate totals (profit + commission + swap) for that symbol
    ↓
 6. DISPLAY RESULTS
-   - Dashboard: Total profit for symbol
+   - Dashboard: Total profit (including commission and swap) for symbol
    - Charts: Balance progression over time
    - Tables: Individual trade profits
-   - Mark-to-Market: Realized + Unrealized P/L
+   - Mark-to-Market: Realized (profit + commission + swap) + Unrealized P/L
 `;

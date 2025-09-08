@@ -355,11 +355,14 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
   const completeTrades = trades.filter(t => t.direction === 'out');
   const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
     const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-    console.log(`HTML Converter - Profit Column Calculation: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
-    return sum + profitValue;
+    const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+    const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+    const totalValue = profitValue + commissionValue + swapValue;
+    console.log(`HTML Converter - Total Profit Calculation: Trade ${trade.deal} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
+    return sum + totalValue;
   }, 0);
 
-  console.log(`HTML Converter - Total from Profit Column: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
+  console.log(`HTML Converter - Total from Profit + Commission + Swap: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
   return {
     csvContent, // Retornar el CSV original
     trades,
@@ -367,7 +370,7 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
       symbol: mainSymbol,
       expertName: 'CSV Import',
       initialBalance: customInitialBalance,
-      totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
+      totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT + COMMISSION + SWAP
       totalTrades: completeTrades.length
     }
   };

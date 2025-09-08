@@ -653,16 +653,19 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
         
         const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
-          const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
-          console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
-          return sum + profitValue;
+          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+          const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+          const totalValue = profitValue + commissionValue + swapValue;
+          console.log(`CSV Parser - Total Profit Calculation: Trade ${trade.position} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
+          return sum + totalValue;
         }, 0);
         
-        const backtestData: BacktestData = {
+        console.log(`CSV Parser - Total from Profit + Commission + Swap: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
           currencyPair: mainSymbol,
           expertName: convertedData.metadata.expertName,
           totalTrades: Math.floor(mainSymbolTrades.length / 2).toString(), // Dividir por 2 porque tenemos in/out
-          totalProfit: `$${convertedData.metadata.totalNetProfit}`,
+          totalProfit: `$${totalRealizedProfit.toFixed(2)}`,
           winRate: `${winRate}%`,
           maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
           tradeHistory: tradeHistory,
@@ -678,7 +681,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         console.log('Backtest data processed:', {
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
-          totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
+          totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT + COMMISSION + SWAP
           availableSymbols: backtestData.availableSymbols,
           markToMarketDataPoints: markToMarketData.length
         });

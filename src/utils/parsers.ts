@@ -134,11 +134,15 @@ const calculateMarkToMarket = (
 
   // Calculate closed P/L for this symbol only
   const symbolClosedPnL = symbolTrades.reduce((total, trade) => {
-    const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
-    const commissionValue = parseFloat(trade.commission.toString().replace(/[^\d.-]/g, '') || '0');
-    const swapValue = parseFloat(trade.swap.toString().replace(/[^\d.-]/g, '') || '0');
-    const totalValue = profitValue + commissionValue + swapValue;
-    console.log(`CSV Parser - Total Profit Calculation: Trade ${trade.position} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
+    // Extract profit, commission, and swap values
+    const rawProfit = trade.profit.replace(/[^\d.-]/g, '') || '0';
+    const rawCommission = trade.commission.replace(/[^\d.-]/g, '') || '0';
+    const rawSwap = trade.swap.replace(/[^\d.-]/g, '') || '0';
+    const numericProfit = parseFloat(rawProfit);
+    const numericCommission = parseFloat(rawCommission);
+    const numericSwap = parseFloat(rawSwap);
+    const totalValue = numericProfit + numericCommission + numericSwap;
+    console.log(`Total profit calculation - Trade ${trade.deal}: Profit="${trade.profit}" Commission="${trade.commission}" Swap="${trade.swap}" -> total=${totalValue}`);
     return total + totalValue;
   }, 0);
   
@@ -146,7 +150,7 @@ const calculateMarkToMarket = (
 
   // Calculate drawdown - we need to track peak balance over time
   // For now, we'll use a simplified calculation based on current balance vs initial
-  const totalPnL = symbolClosedPnL; // Use realized profit + commission + swap for total
+  const totalPnL = symbolClosedPnL; // Only use realized profit for total
   const currentTotalBalance = initialBalance + totalPnL;
   const peakBalance = Math.max(initialBalance, currentTotalBalance);
   const currentDrawdown = peakBalance > 0 ? ((peakBalance - currentTotalBalance) / peakBalance) * 100 : 0;
@@ -159,7 +163,6 @@ const calculateMarkToMarket = (
     eoPeriodPrice: `$${marketPrice.toFixed(5)}`,
     currentFX: '1.00',
     total: `$${symbolClosedPnL.toFixed(2)}`, // Total now equals closed (realized only)
-    total: `$${symbolClosedPnL.toFixed(2)}`, // Total = Profit column only (REALIZED)
     trades: tradesWithPnL,
     openTradesCount: openTrades.length.toString(),
     currentDrawdown: `${Math.max(0, currentDrawdown).toFixed(2)}%`

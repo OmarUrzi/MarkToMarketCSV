@@ -36,10 +36,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     rawTotalProfit: totalProfit,
     parsedValue: profitValue,
     selectedSymbol,
-    dataSource: 'PROFIT COLUMN from closed trades only',
-    calculation: 'Sum of PROFIT COLUMN values for CLOSED trades of selected symbol',
-    excludes: 'Commission, Swap, and Unrealized profit from open positions',
-    note: 'Uses only the Profit column data, not commission or swap'
+    dataSource: 'PROFIT + COMMISSION + SWAP from closed trades only',
+    calculation: 'Sum of PROFIT + COMMISSION + SWAP values for CLOSED trades of selected symbol',
+    excludes: 'Unrealized profit from open positions',
+    note: 'Includes profit, commission, and swap data'
   });
   console.log('=== END DASHBOARD PROFIT DISPLAY ===');
 

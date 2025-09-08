@@ -135,8 +135,11 @@ function App() {
       const totalProfit = symbolTrades.reduce((sum, trade) => 
         {
           const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-          console.log(`App Symbol Change - Profit Column: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
-          return sum + profitValue;
+          const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+          const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+          const totalValue = profitValue + commissionValue + swapValue;
+          console.log(`App Symbol Change - Total Profit: Trade ${trade.deal} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
+          return sum + totalValue;
         }, 0
       );
 
@@ -145,7 +148,7 @@ function App() {
         profitableTrades: profitableTrades.length,
         winRate: winRate,
         totalProfit: totalProfit.toFixed(2),
-        note: 'Calculated from Profit column only'
+        note: 'Calculated from Profit + Commission + Swap'
       });
 
       // Fetch new mark to market data for the selected symbol
@@ -169,7 +172,7 @@ function App() {
       const updatedData: BacktestData = {
         ...backtestData,
         currencyPair: symbol,
-        totalProfit: `$${totalProfit.toFixed(2)}`, // FROM PROFIT COLUMN ONLY
+        totalProfit: `$${totalProfit.toFixed(2)}`, // FROM PROFIT + COMMISSION + SWAP
         winRate: `${winRate}%`,
         totalTrades: symbolTrades.length.toString(),
         markToMarketData: newMarkToMarketData
@@ -178,13 +181,13 @@ function App() {
       setBacktestData(updatedData);
       setSelectedSymbol(symbol);
       
-      console.log(`=== APP SYMBOL CHANGE - PROFIT COLUMN ONLY ===`);
-      console.log(`App: Successfully updated data for symbol ${symbol} (PROFIT COLUMN):`, {
+      console.log(`=== APP SYMBOL CHANGE - TOTAL PROFIT ===`);
+      console.log(`App: Successfully updated data for symbol ${symbol} (TOTAL PROFIT):`, {
         totalTrades: symbolTrades.length,
-        profitColumnTotal: totalProfit.toFixed(2),
+        totalProfitAmount: totalProfit.toFixed(2),
         winRate: winRate,
         markToMarketDataPoints: newMarkToMarketData.length,
-        note: 'Total Profit = Profit Column Only (excludes commission, swap, unrealized)'
+        note: 'Total Profit = Profit + Commission + Swap (excludes unrealized)'
       });
       console.log('=== END APP SYMBOL CHANGE ===');
       
