@@ -662,6 +662,8 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         }, 0);
         
         console.log(`CSV Parser - Total from Profit + Commission + Swap: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
+        
+        const backtestData: BacktestData = {
           currencyPair: mainSymbol,
           expertName: convertedData.metadata.expertName,
           totalTrades: Math.floor(mainSymbolTrades.length / 2).toString(), // Dividir por 2 porque tenemos in/out
