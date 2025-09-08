@@ -31,12 +31,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Parse the profit value, removing the $ sign
   const profitValue = parseFloat(totalProfit.replace('$', ''));
   
-  console.log('Dashboard Profit Display:', {
+  console.log('Dashboard Net Profit Display (Profit - Commission - Swap):', {
     rawTotalProfit: totalProfit,
     parsedValue: profitValue,
     selectedSymbol,
-    dataSource: 'Calculated from filtered trade records',
-    calculation: 'Sum of (profit + commission + swap) for selected symbol'
+    dataSource: 'Calculated from filtered trade records (closed trades only)',
+    calculation: 'Sum of (profit - commission - swap) for selected symbol'
   });
 
   const handleNewUpload = () => {

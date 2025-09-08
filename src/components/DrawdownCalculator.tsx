@@ -75,7 +75,8 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
       const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
       
-      runningBalance += profit + commission + swap;
+      const netProfit = profit - commission - swap;
+      runningBalance += netProfit;
 
       // Update peak if current balance is higher
       if (runningBalance > peakBalance) {
