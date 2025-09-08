@@ -145,7 +145,7 @@ const calculateMarkToMarket = (
 
   // Calculate drawdown - we need to track peak balance over time
   // For now, we'll use a simplified calculation based on current balance vs initial
-  const totalPnL = symbolClosedPnL + openPnL;
+  const totalPnL = symbolClosedPnL; // Only use realized profit for total
   const currentTotalBalance = initialBalance + totalPnL;
   const peakBalance = Math.max(initialBalance, currentTotalBalance);
   const currentDrawdown = peakBalance > 0 ? ((peakBalance - currentTotalBalance) / peakBalance) * 100 : 0;
@@ -158,7 +158,7 @@ const calculateMarkToMarket = (
     eoPeriodPrice: `$${marketPrice.toFixed(5)}`,
     currentFX: '1.00',
     open: `$${openPnL.toFixed(2)}`,
-    total: `$${(symbolClosedPnL + openPnL).toFixed(2)}`,
+    total: `$${symbolClosedPnL.toFixed(2)}`, // Total now equals closed (realized only)
     trades: tradesWithPnL,
     openTradesCount: openTrades.length.toString(),
     currentDrawdown: `${Math.max(0, currentDrawdown).toFixed(2)}%`
