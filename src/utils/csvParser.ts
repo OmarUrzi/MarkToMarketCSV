@@ -275,6 +275,10 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     // Format dates for API call
     const formattedFromDate = fromDateObj.toISOString().split('T')[0];
     const formattedToDate = toDateObj.toISOString().split('T')[0];
+
+    const apiUrl = `https://api.example.com/market-data?symbol=${symbol}&from=${formattedFromDate}&to=${formattedToDate}`;
+
+    const response = await axios({
       method: 'get',
       url: apiUrl,
       headers: {
@@ -299,7 +303,7 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     let marketDataPoints: MarketDataPoint[] = [];
     
     if (typeof response.data === 'string') {
-      marketDataPoints = parseNDJSON(response.data.data);
+      marketDataPoints = parseNDJSON(response.data);
     } else if (response.data.data && Array.isArray(response.data.data)) {
       marketDataPoints = response.data.data;
     }
@@ -590,9 +594,9 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
         
         const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
-          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-          const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
-          const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+          const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
+          const commissionValue = parseFloat(trade.commission.toString().replace(/[^\d.-]/g, '') || '0');
+          const swapValue = parseFloat(trade.swap.toString().replace(/[^\d.-]/g, '') || '0');
           const totalValue = profitValue + commissionValue + swapValue;
           return sum + totalValue;
         }, 0);
