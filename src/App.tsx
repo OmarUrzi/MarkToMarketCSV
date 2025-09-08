@@ -8,8 +8,8 @@ import { NewChartSection } from './components/NewChartSection';
 import { TradeHistory } from './components/TradeHistory';
 import { MarkToMarketAnalytics } from './components/MarkToMarketAnalytics';
 import { BacktestData } from './types';
-import { parseHtmlFile, fetchMarkToMarketForSymbol } from './utils/parsers';
-import { parseCSVFile } from './utils/csvParser';
+import { parseHtmlFile } from './utils/parsers';
+import { parseCSVFile, generateMarkToMarketData, convertTradesForMarkToMarket } from './utils/csvParser';
 import { convertXlsxToCSV } from './utils/xlsxToCsvConverter';
 import { mockBacktestData } from './data/mockData';
 import { TimezoneSelector } from './components/TimezoneSelector';
@@ -147,9 +147,10 @@ function App() {
       let newMarkToMarketData = [];
       try {
         console.log(`App: Fetching mark-to-market data for ${symbol}`);
-        newMarkToMarketData = await fetchMarkToMarketForSymbol(
+        const completeTrades = convertTradesForMarkToMarket(backtestData.tradeHistory);
+        newMarkToMarketData = await generateMarkToMarketData(
+          completeTrades,
           symbol,
-          backtestData.tradeHistory,
           initialAmount,
           csvTimezone
         );
