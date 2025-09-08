@@ -8,9 +8,9 @@ import { NewChartSection } from './components/NewChartSection';
 import { TradeHistory } from './components/TradeHistory';
 import { MarkToMarketAnalytics } from './components/MarkToMarketAnalytics';
 import { BacktestData } from './types';
-import { parseHtmlFile, fetchMarkToMarketForSymbol } from './utils/parsers';
-import { parseCSVFile } from './utils/csvParser';
+import { parseCSVFile, generateMarkToMarketData, convertTradesForMarkToMarket } from './utils/csvParser';
 import { convertXlsxToCSV } from './utils/xlsxToCsvConverter';
+import { convertHtmlToCSV } from './utils/htmlToCsvConverter';
 import { mockBacktestData } from './data/mockData';
 import { TimezoneSelector } from './components/TimezoneSelector';
 
@@ -61,8 +61,19 @@ function App() {
         // Handle CSV file
         data = await parseCSVFile(file, timezone, initialAmount);
       } else if (fileName.endsWith('.htm') || fileName.endsWith('.html')) {
-        // Handle HTML file
-        data = await parseHtmlFile(file, timezone, initialAmount);
+        // Handle HTML file - convert to CSV first
+        const htmlContent = await file.text();
+        const htmlData = convertHtmlToCSV(htmlContent, timezone, initialAmount);
+        
+        // Create a virtual CSV file and use the existing CSV parser
+        const csvBlob = new Blob([htmlData.csvContent], { type: 'text/csv' });
+        const csvFile = new File([csvBlob], 'converted.csv', { type: 'text/csv' });
+        
+        data = await parseCSVFile(csvFile, timezone, initialAmount);
+        
+        // Update metadata with HTML information
+        data.expertName = htmlData.metadata.expertName;
+        data.totalProfit = `$${htmlData.metadata.totalNetProfit}`;
       } else {
         throw new Error('Please upload either an HTML file (.html/.htm) from MT4/MT5 backtest report, a CSV file (.csv) with trade data, or an Excel file (.xlsx/.xls) with trade history');
       }
@@ -133,26 +144,32 @@ function App() {
         : '0.00';
 
       const totalProfit = symbolTrades.reduce((sum, trade) => 
-        {
-          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-          const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
-          const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
-          const totalValue = profitValue + commissionValue + swapValue;
-          console.log(`App Symbol Change - Total Profit: Trade ${trade.deal} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
-        }, 0
+        sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'), 0
       );
 
+      console.log(`App: Symbol ${symbol} stats:`, {
+        totalTrades: symbolTrades.length,
+        profitableTrades: profitableTrades.length,
+        winRate: winRate,
+        totalProfit: totalProfit.toFixed(2)
+      });
 
       // Fetch new mark to market data for the selected symbol
       let newMarkToMarketData = [];
       try {
-        newMarkToMarketData = await fetchMarkToMarketForSymbol(
+        console.log(`App: Fetching mark-to-market data for ${symbol}`);
+        const completeTrades = convertTradesForMarkToMarket(backtestData.tradeHistory);
+        newMarkToMarketData = await generateMarkToMarketData(
+          completeTrades,
           symbol,
-          backtestData.tradeHistory,
-          backtestData.initialBalance,
-          csvTimezone
+          initialAmount,
+          sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') + 
+          parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0') + 
+          parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0'), 0
         );
+        console.log(`App: Received ${newMarkToMarketData.length} mark-to-market data points for ${symbol}`);
       } catch (error) {
+        console.error('App: Failed to fetch market data for symbol:', symbol, error);
         // Continue with empty mark to market data but show a warning
         setError(`Warning: Could not fetch market data for ${symbol}. Charts may not display properly.`);
       }
@@ -161,7 +178,7 @@ function App() {
       const updatedData: BacktestData = {
         ...backtestData,
         currencyPair: symbol,
-        totalProfit: `$${totalProfit.toFixed(2)}`, // FROM PROFIT + COMMISSION + SWAP
+        totalProfit: `$${totalProfit.toFixed(2)}`,
         winRate: `${winRate}%`,
         totalTrades: symbolTrades.length.toString(),
         markToMarketData: newMarkToMarketData
@@ -170,8 +187,19 @@ function App() {
       setBacktestData(updatedData);
       setSelectedSymbol(symbol);
       
+      console.log(`App: Successfully updated data for symbol ${symbol}:`, {
+        totalTrades: symbolTrades.length,
+        totalProfit: totalProfit.toFixed(2),
+        winRate: winRate,
+        markToMarketDataPoints: newMarkToMarketData.length
+      });
+      console.log('=== SYMBOL CHANGE END ===');
+      
     } catch (error) {
+      console.error('=== SYMBOL CHANGE FAILED ===');
+      console.error('App: Error changing symbol:', error);
       setError(`Failed to load data for symbol ${symbol}: ${error.message}`);
+      console.error('=== END SYMBOL CHANGE ERROR ===');
     } finally {
       setIsLoadingSymbol(false);
     }
@@ -181,6 +209,7 @@ function App() {
   const getFilteredTradeHistory = () => {
     if (!backtestData || !selectedSymbol) return [];
     const filtered = backtestData.tradeHistory.filter(trade => trade.symbol === selectedSymbol);
+    console.log(`App: Filtered trade history for ${selectedSymbol}:`, filtered.length, 'trades');
     return filtered;
   };
 

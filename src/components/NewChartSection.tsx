@@ -1,10 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BacktestData } from '../types';
 import { DrawdownCalculator } from './DrawdownCalculator';
+import { renderBalanceAreaChart, renderPeriodReturnsChart } from '../utils/parsers';
 import { 
-  renderPeriodReturnsChart, 
-  renderBalanceAreaChart, 
-  renderDrawdownChart,
+  createDrawdownChart,
   DrillDownState,
   DrawdownMode
 } from '../utils/newChartUtils';
@@ -113,7 +112,7 @@ export const NewChartSection: React.FC<NewChartSectionProps> = ({
   // Drawdown Chart
   useEffect(() => {
     if (drawdownChartRef.current && symbolTrades.length > 0) {
-      const { chart, cleanup } = renderDrawdownChart(
+      const { chart, cleanup } = createDrawdownChart(
         drawdownChartRef.current,
         symbolTrades,
         initialBalance,

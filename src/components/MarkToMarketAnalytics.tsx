@@ -252,7 +252,7 @@ export const MarkToMarketAnalytics: React.FC<MarkToMarketAnalyticsProps> = ({
                       Open P/L
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Total P/L (Realized)
+                      Total P/L
                     </th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Drawdown

@@ -53,11 +53,10 @@ export interface ProfitCalculationSources {
       formula: 'For BUY: (currentPrice - entryPrice) * volume * contractSize';
       formula2: 'For SELL: (entryPrice - currentPrice) * volume * contractSize';
       contractSize: '100,000 for forex pairs';
-      note: 'Open P/L is calculated but NOT included in total profit',
     };
     totalPnL: {
-      formula: 'closedPnL only',
-      description: 'Total profit from realized trades only (excludes unrealized)',
+      formula: 'closedPnL + openPnL';
+      description: 'Total profit including unrealized gains/losses';
     };
   };
 }
@@ -135,7 +134,6 @@ export const dataFlowSummary = `
 3. CLEAN PROFIT VALUES
    - Remove currency symbols: profit.replace(/[^\\d.-]/g, '')
    - Convert to numbers: parseFloat()
-   - Include commission and swap in total calculations
    ↓
 4. CALCULATE RUNNING BALANCE
    - Start with initialBalance
@@ -143,11 +141,11 @@ export const dataFlowSummary = `
    ↓
 5. FILTER BY SYMBOL
    - Show only trades for selected symbol
-   - Recalculate totals (profit + commission + swap) for that symbol
+   - Recalculate totals for that symbol
    ↓
 6. DISPLAY RESULTS
-   - Dashboard: Total profit (including commission and swap) for symbol
+   - Dashboard: Total profit for symbol
    - Charts: Balance progression over time
    - Tables: Individual trade profits
-   - Mark-to-Market: Realized (profit + commission + swap) + Unrealized P/L
+   - Mark-to-Market: Realized + Unrealized P/L
 `;

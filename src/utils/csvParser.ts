@@ -221,6 +221,7 @@ const parseCSVContent = (csvContent: string): { headers: string[], dataRows: str
     headers = firstLine.split(',').map(h => h.trim());
   }
 
+  console.log('Detected CSV headers:', headers);
 
   // Validate that we have the expected headers
   const expectedHeaders = ['Time', 'Position', 'Symbol', 'Type', 'Volume', 'Price', 'S / L', 'T / P', 'Commission', 'Swap', 'Profit'];
@@ -228,6 +229,9 @@ const parseCSVContent = (csvContent: string): { headers: string[], dataRows: str
     !headers.some(header => header.toLowerCase().includes(expected.toLowerCase()))
   );
 
+  if (missingHeaders.length > 0) {
+    console.warn('Missing expected headers:', missingHeaders);
+  }
 
   const dataRows: string[][] = [];
 
@@ -244,6 +248,7 @@ const parseCSVContent = (csvContent: string): { headers: string[], dataRows: str
     }
 
     if (values.length < headers.length) {
+      console.warn(`Row ${i + 1} has ${values.length} columns, expected ${headers.length}`);
       // Pad with empty strings if needed
       while (values.length < headers.length) {
         values.push('');
@@ -275,8 +280,11 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     // Format dates for API call
     const formattedFromDate = fromDateObj.toISOString().split('T')[0];
     const formattedToDate = toDateObj.toISOString().split('T')[0];
-
-    const apiUrl = `https://api.example.com/market-data?symbol=${symbol}&from=${formattedFromDate}&to=${formattedToDate}`;
+    
+    const apiUrl = `https://test.neuix.host/api/market-data/get?from_date=${encodeURIComponent(formattedFromDate)}&to_date=${encodeURIComponent(formattedToDate)}&timeframe=M15&symbols=${encodeURIComponent(symbol)}`;
+    
+    console.log('CSV Parser Final API URL:', apiUrl);
+    console.log('CSV Parser API call timestamp:', new Date().toISOString());
 
     const response = await axios({
       method: 'get',
@@ -292,6 +300,8 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
       status: response.status,
       statusText: response.statusText,
       dataType: typeof response.data,
+      dataLength: Array.isArray(response.data) ? response.data.length : 'not array',
+      timestamp: new Date().toISOString()
     });
 
     if (!response.data) {
@@ -303,15 +313,38 @@ const fetchMarketData = async (symbol: string, fromDate: string, toDate: string)
     let marketDataPoints: MarketDataPoint[] = [];
     
     if (typeof response.data === 'string') {
+      console.log('CSV Parser: Parsing NDJSON response');
       marketDataPoints = parseNDJSON(response.data);
+    } else if (Array.isArray(response.data)) {
+      console.log('CSV Parser: Using array response directly');
+      marketDataPoints = response.data;
+    } else if (response.data.data && typeof response.data.data === 'string') {
+      console.log('CSV Parser: Parsing nested NDJSON response');
+      marketDataPoints = parseNDJSON(response.data.data);
     } else if (response.data.data && Array.isArray(response.data.data)) {
+      console.log('CSV Parser: Using nested array response');
       marketDataPoints = response.data.data;
     }
 
+    console.log(`CSV Parser: Received ${marketDataPoints.length} market data points for ${symbol}`);
+    if (marketDataPoints.length > 0) {
+      console.log('CSV Parser: First data point:', marketDataPoints[0]);
+      console.log('CSV Parser: Last data point:', marketDataPoints[marketDataPoints.length - 1]);
+    }
+    console.log('=== CSV PARSER MARKET DATA API CALL END ===');
 
     return marketDataPoints;
 
   } catch (error) {
+    console.error('=== CSV PARSER MARKET DATA API CALL FAILED ===');
+    console.error('CSV Parser API Error:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      headers: error.response?.headers,
+      timestamp: new Date().toISOString()
+    });
+    console.error('=== END CSV PARSER API CALL ERROR ===');
     throw error;
   }
 };
@@ -348,7 +381,7 @@ const getMarketPriceAtTime = (marketData: MarketDataPoint[], targetTime: Date): 
   return closestPoint.close;
 };
 
-const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selectedSymbol: string, initialBalance: number, csvTimezone: number = 0): Promise<MarkToMarketItem[]> => {
+export const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selectedSymbol: string, initialBalance: number, csvTimezone: number = 0): Promise<MarkToMarketItem[]> => {
   const symbolTrades = completeTrades.filter(trade => trade.symbol === selectedSymbol);
   
   if (symbolTrades.length === 0) {
@@ -444,10 +477,8 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     
     // Calculate closed P/L up to this point (cumulative)
     const closedTrades = symbolTrades.filter(trade => trade.closeTime <= currentDateTime);
-    const totalRealizedProfit = closedTrades.reduce((sum, trade) => {
-      const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
-      console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
-      return sum + profitValue;
+    runningClosedPnL = closedTrades.reduce((total, trade) => {
+      return total + trade.profit + trade.commission + trade.swap;
     }, 0);
     
     // Find open positions at this time
@@ -515,7 +546,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     const aep = totalWeightedVolume > 0 ? weightedAveragePrice / totalWeightedVolume : 0;
     
     // Calculate total P/L and drawdown
-    const totalPnL = totalRealizedProfit; // CRITICAL: Total P/L = REALIZED PROFIT ONLY
+    const totalPnL = runningClosedPnL + openPnL;
     const currentBalance = initialBalance + totalPnL;
     
     // Update peak balance for drawdown calculation
@@ -531,12 +562,12 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     markToMarketData.push({
       date: formattedDate,
       position: netPosition.toFixed(2), // Net position (positive = long, negative = short)
-      closed: `$${totalRealizedProfit.toFixed(2)}`, // Realized P/L from closed trades
+      closed: `$${runningClosedPnL.toFixed(2)}`, // Realized P/L from closed trades
       aep: `$${aep.toFixed(5)}`, // Average Entry Price of open positions
       eoPeriodPrice: `$${finalMarketPrice.toFixed(5)}`, // Current market price
       currentFX: '1.00', // Conversion rate (assuming USD base)
       open: `$${openPnL.toFixed(2)}`, // Unrealized P/L from open positions
-      total: `$${totalPnL.toFixed(2)}`, // Total P/L = REALIZED ONLY (excludes unrealized)
+      total: `$${totalPnL.toFixed(2)}`, // Total P/L (realized + unrealized)
       trades: openTradesWithPnL, // Details of open trades
       openTradesCount: openTrades.length.toString(), // Number of open trades
       currentDrawdown: `${currentDrawdown.toFixed(2)}%` // Current drawdown percentage
@@ -564,14 +595,25 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
           throw new Error('File is empty. Please upload a valid CSV or HTML file.');
         }
         
+        console.log('CSV Content preview:', csvContent.substring(0, 500));
+        
+        console.log('Converting CSV to unified format...');
+        
         let convertedData;
         try {
           // Convertir CSV a formato unificado
           convertedData = convertCSVToUnified(csvContent, csvTimezone, customInitialBalance);
         } catch (error) {
           // If CSV conversion fails, it might be an HTML file
+          console.log('CSV conversion failed, trying HTML conversion:', error.message);
           throw new Error('Invalid CSV format. Please ensure your file has the correct CSV structure with headers and data rows, or upload an HTML backtest report instead.');
         }
+        
+        console.log('CSV converted to unified format:', {
+          symbol: convertedData.metadata.symbol,
+          totalTrades: convertedData.metadata.totalTrades,
+          tradesCount: convertedData.trades.length
+        });
         
         // Procesar usando la lógica existente pero con datos unificados
         const tradeHistory = convertedData.trades;
@@ -583,8 +625,8 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
           trade.symbol === mainSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
         );
         const profitableTrades = mainSymbolTrades.filter(trade => parseFloat(trade.profit) > 0);
-        const winRate = mainSymbolTrades.length > 0
-          ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2)
+        const winRate = mainSymbolTrades.length > 0 
+          ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2) 
           : '0.00';
         
         // Calcular max drawdown
@@ -604,22 +646,15 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         }
         
         // Generar mark-to-market data
+        console.log('Generating mark-to-market data...');
         const completeTrades = convertTradesForMarkToMarket(tradeHistory);
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
-        
-        const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
-          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-          const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
-          const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
-          const totalValue = profitValue + commissionValue + swapValue;
-          return sum + totalValue;
-        }, 0);
         
         const backtestData: BacktestData = {
           currencyPair: mainSymbol,
           expertName: convertedData.metadata.expertName,
           totalTrades: Math.floor(mainSymbolTrades.length / 2).toString(), // Dividir por 2 porque tenemos in/out
-          totalProfit: `$${totalRealizedProfit.toFixed(2)}`,
+          totalProfit: `$${convertedData.metadata.totalNetProfit}`,
           winRate: `${winRate}%`,
           maxDrawdown: `${maxDrawdown.toFixed(2)}%`,
           tradeHistory: tradeHistory,
@@ -632,9 +667,18 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         // Agregar el CSV unificado para descarga
         (backtestData as any).unifiedCSV = convertedData.csvContent;
         
+        console.log('Backtest data processed:', {
+          symbol: backtestData.currencyPair,
+          totalTrades: backtestData.totalTrades,
+          totalProfit: backtestData.totalProfit,
+          availableSymbols: backtestData.availableSymbols,
+          markToMarketDataPoints: markToMarketData.length
+        });
+
         resolve(backtestData);
 
       } catch (error) {
+        console.error('Error processing CSV file:', error);
         reject(new Error(error instanceof Error ? error.message : 'Failed to parse CSV file'));
       }
     };
@@ -645,7 +689,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
 };
 
 // Función auxiliar para convertir trades a formato para mark-to-market
-const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
+export const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
   const completeTrades: CompleteTrade[] = [];
   const openTrades = new Map<string, TradeHistoryItem>();
   
