@@ -30,6 +30,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Parse the profit value, removing the $ sign
   const profitValue = parseFloat(totalProfit.replace('$', ''));
+  
+  console.log('Dashboard Profit Display:', {
+    rawTotalProfit: totalProfit,
+    parsedValue: profitValue,
+    selectedSymbol,
+    dataSource: 'Calculated from filtered trade records',
+    calculation: 'Sum of (profit + commission + swap) for selected symbol'
+  });
 
   const handleNewUpload = () => {
     window.location.reload();
