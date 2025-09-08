@@ -139,31 +139,20 @@ function App() {
           const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
           const totalValue = profitValue + commissionValue + swapValue;
           console.log(`App Symbol Change - Total Profit: Trade ${trade.deal} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
-          return sum + totalValue;
         }, 0
       );
 
-      console.log(`App: Symbol ${symbol} stats:`, {
-        totalTrades: symbolTrades.length,
-        profitableTrades: profitableTrades.length,
-        winRate: winRate,
-        totalProfit: totalProfit.toFixed(2),
-        note: 'Calculated from Profit + Commission + Swap'
-      });
 
       // Fetch new mark to market data for the selected symbol
       let newMarkToMarketData = [];
       try {
-        console.log(`App: Fetching mark-to-market data for ${symbol}`);
         newMarkToMarketData = await fetchMarkToMarketForSymbol(
           symbol,
           backtestData.tradeHistory,
           backtestData.initialBalance,
           csvTimezone
         );
-        console.log(`App: Received ${newMarkToMarketData.length} mark-to-market data points for ${symbol}`);
       } catch (error) {
-        console.error('App: Failed to fetch market data for symbol:', symbol, error);
         // Continue with empty mark to market data but show a warning
         setError(`Warning: Could not fetch market data for ${symbol}. Charts may not display properly.`);
       }
@@ -181,21 +170,8 @@ function App() {
       setBacktestData(updatedData);
       setSelectedSymbol(symbol);
       
-      console.log(`=== APP SYMBOL CHANGE - TOTAL PROFIT ===`);
-      console.log(`App: Successfully updated data for symbol ${symbol} (TOTAL PROFIT):`, {
-        totalTrades: symbolTrades.length,
-        totalProfitAmount: totalProfit.toFixed(2),
-        winRate: winRate,
-        markToMarketDataPoints: newMarkToMarketData.length,
-        note: 'Total Profit = Profit + Commission + Swap (excludes unrealized)'
-      });
-      console.log('=== END APP SYMBOL CHANGE ===');
-      
     } catch (error) {
-      console.error('=== SYMBOL CHANGE FAILED ===');
-      console.error('App: Error changing symbol:', error);
       setError(`Failed to load data for symbol ${symbol}: ${error.message}`);
-      console.error('=== END SYMBOL CHANGE ERROR ===');
     } finally {
       setIsLoadingSymbol(false);
     }
@@ -205,7 +181,6 @@ function App() {
   const getFilteredTradeHistory = () => {
     if (!backtestData || !selectedSymbol) return [];
     const filtered = backtestData.tradeHistory.filter(trade => trade.symbol === selectedSymbol);
-    console.log(`App: Filtered trade history for ${selectedSymbol}:`, filtered.length, 'trades');
     return filtered;
   };
 

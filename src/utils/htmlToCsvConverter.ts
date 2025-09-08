@@ -358,11 +358,9 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
     const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
     const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
     const totalValue = profitValue + commissionValue + swapValue;
-    console.log(`HTML Converter - Total Profit Calculation: Trade ${trade.deal} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
     return sum + totalValue;
   }, 0);
 
-  console.log(`HTML Converter - Total from Profit + Commission + Swap: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
   return {
     csvContent, // Retornar el CSV original
     trades,

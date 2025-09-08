@@ -31,24 +31,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Parse the profit value, removing the $ sign
   const profitValue = parseFloat(totalProfit.replace('$', ''));
   
-  console.log('=== DASHBOARD TOTAL NET PROFIT ===');
-  console.log('Dashboard Profit Display (REALIZED ONLY):', {
-    rawTotalProfit: totalProfit,
-    parsedValue: profitValue,
-    selectedSymbol,
-    dataSource: 'PROFIT + COMMISSION + SWAP from closed trades only',
-    calculation: 'Sum of PROFIT + COMMISSION + SWAP values for CLOSED trades of selected symbol',
-    excludes: 'Unrealized profit from open positions',
-    note: 'Includes profit, commission, and swap data'
-  });
-  console.log('=== END DASHBOARD PROFIT DISPLAY ===');
 
   const handleNewUpload = () => {
     window.location.reload();
   };
 
   const handleSymbolChange = (newSymbol: string) => {
-    console.log(`Dashboard: Symbol change requested from ${selectedSymbol} to ${newSymbol}`);
     onSymbolChange(newSymbol);
   };
 

@@ -70,11 +70,8 @@ export const convertXlsxToCSV = (file: File, csvTimezone: number = 0, customInit
           const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
           const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
           const totalValue = profitValue + commissionValue + swapValue;
-          console.log(`XLSX Converter - Total Profit Calculation: Trade ${trade.deal} profit="${trade.profit}" commission="${trade.commission}" swap="${trade.swap}" -> total=${totalValue}`);
           return sum + totalValue;
         }, 0);
-        
-        console.log(`XLSX Converter - Total from Profit + Commission + Swap: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
         
         const result: ConvertedXLSXData = {
           csvContent,
