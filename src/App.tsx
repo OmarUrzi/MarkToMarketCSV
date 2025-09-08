@@ -8,9 +8,9 @@ import { NewChartSection } from './components/NewChartSection';
 import { TradeHistory } from './components/TradeHistory';
 import { MarkToMarketAnalytics } from './components/MarkToMarketAnalytics';
 import { BacktestData } from './types';
-import { parseHtmlFile } from './utils/parsers';
 import { parseCSVFile, generateMarkToMarketData, convertTradesForMarkToMarket } from './utils/csvParser';
 import { convertXlsxToCSV } from './utils/xlsxToCsvConverter';
+import { convertHtmlToCSV } from './utils/htmlToCsvConverter';
 import { mockBacktestData } from './data/mockData';
 import { TimezoneSelector } from './components/TimezoneSelector';
 
@@ -61,8 +61,19 @@ function App() {
         // Handle CSV file
         data = await parseCSVFile(file, timezone, initialAmount);
       } else if (fileName.endsWith('.htm') || fileName.endsWith('.html')) {
-        // Handle HTML file
-        data = await parseHtmlFile(file, timezone, initialAmount);
+        // Handle HTML file - convert to CSV first
+        const htmlContent = await file.text();
+        const htmlData = convertHtmlToCSV(htmlContent, timezone, initialAmount);
+        
+        // Create a virtual CSV file and use the existing CSV parser
+        const csvBlob = new Blob([htmlData.csvContent], { type: 'text/csv' });
+        const csvFile = new File([csvBlob], 'converted.csv', { type: 'text/csv' });
+        
+        data = await parseCSVFile(csvFile, timezone, initialAmount);
+        
+        // Update metadata with HTML information
+        data.expertName = htmlData.metadata.expertName;
+        data.totalProfit = `$${htmlData.metadata.totalNetProfit}`;
       } else {
         throw new Error('Please upload either an HTML file (.html/.htm) from MT4/MT5 backtest report, a CSV file (.csv) with trade data, or an Excel file (.xlsx/.xls) with trade history');
       }
