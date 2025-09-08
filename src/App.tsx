@@ -164,7 +164,7 @@ function App() {
       const updatedData: BacktestData = {
         ...backtestData,
         currencyPair: symbol,
-        totalProfit: `$${totalProfit.toFixed(2)}`,
+        totalProfit: `$${totalProfit.toFixed(2)}`, // REALIZED PROFIT ONLY
         winRate: `${winRate}%`,
         totalTrades: symbolTrades.length.toString(),
         markToMarketData: newMarkToMarketData
@@ -173,13 +173,15 @@ function App() {
       setBacktestData(updatedData);
       setSelectedSymbol(symbol);
       
-      console.log(`App: Successfully updated data for symbol ${symbol}:`, {
+      console.log(`=== APP SYMBOL CHANGE - REALIZED PROFIT ONLY ===`);
+      console.log(`App: Successfully updated data for symbol ${symbol} (REALIZED PROFIT):`, {
         totalTrades: symbolTrades.length,
-        totalProfit: totalProfit.toFixed(2),
+        realizedProfit: totalProfit.toFixed(2),
         winRate: winRate,
-        markToMarketDataPoints: newMarkToMarketData.length
+        markToMarketDataPoints: newMarkToMarketData.length,
+        note: 'Total Profit = Realized Profit Only (excludes unrealized)'
       });
-      console.log('=== SYMBOL CHANGE END ===');
+      console.log('=== END APP SYMBOL CHANGE ===');
       
     } catch (error) {
       console.error('=== SYMBOL CHANGE FAILED ===');
