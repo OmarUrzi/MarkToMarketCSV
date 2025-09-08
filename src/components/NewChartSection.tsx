@@ -1,9 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BacktestData } from '../types';
 import { DrawdownCalculator } from './DrawdownCalculator';
-import { renderBalanceAreaChart } from '../utils/parsers';
+import { renderBalanceAreaChart, renderPeriodReturnsChart } from '../utils/parsers';
 import { 
-  renderPeriodReturnsChart, 
   createDrawdownChart,
   DrillDownState,
   DrawdownMode
