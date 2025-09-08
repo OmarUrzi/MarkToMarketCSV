@@ -115,7 +115,7 @@ const calculateMarkToMarket = (
       ? (marketPrice - trade.entryPrice) * trade.volume * 100000
       : (trade.entryPrice - marketPrice) * trade.volume * 100000;
     
-    totalVolume += trade.type === 'buy' ? trade.volume : -trade.volume;
+   const totalPnL = symbolClosedPnL; // IMPORTANT: Total P/L = Realized profit ONLY (no unrealized)
     openPnL += pnl;
     weightedAveragePrice += trade.entryPrice * trade.volume;
     totalWeightedVolume += trade.volume;
@@ -157,7 +157,7 @@ const calculateMarkToMarket = (
     aep: `$${aep.toFixed(5)}`,
     eoPeriodPrice: `$${marketPrice.toFixed(5)}`,
     currentFX: '1.00',
-    open: `$${openPnL.toFixed(2)}`,
+     total: `$${symbolClosedPnL.toFixed(2)}`, // Total = Closed (REALIZED PROFIT ONLY)
     total: `$${symbolClosedPnL.toFixed(2)}`, // Total now equals closed (realized only)
     trades: tradesWithPnL,
     openTradesCount: openTrades.length.toString(),

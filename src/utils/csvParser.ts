@@ -546,7 +546,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     const aep = totalWeightedVolume > 0 ? weightedAveragePrice / totalWeightedVolume : 0;
     
     // Calculate total P/L and drawdown
-    const totalPnL = runningClosedPnL; // Only use realized profit for total
+   const totalPnL = runningClosedPnL; // CRITICAL: Total P/L = REALIZED PROFIT ONLY
     const currentBalance = initialBalance + totalPnL;
     
     // Update peak balance for drawdown calculation
@@ -567,7 +567,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
       eoPeriodPrice: `$${finalMarketPrice.toFixed(5)}`, // Current market price
       currentFX: '1.00', // Conversion rate (assuming USD base)
       open: `$${openPnL.toFixed(2)}`, // Unrealized P/L from open positions
-      total: `$${totalPnL.toFixed(2)}`, // Total P/L (realized only)
+     total: `$${totalPnL.toFixed(2)}`, // Total P/L = REALIZED ONLY (excludes unrealized)
       trades: openTradesWithPnL, // Details of open trades
       openTradesCount: openTrades.length.toString(), // Number of open trades
       currentDrawdown: `${currentDrawdown.toFixed(2)}%` // Current drawdown percentage
