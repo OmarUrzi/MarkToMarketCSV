@@ -133,14 +133,19 @@ function App() {
         : '0.00';
 
       const totalProfit = symbolTrades.reduce((sum, trade) => 
-        sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'), 0
+        {
+          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          console.log(`App Symbol Change - Profit Column: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
+          return sum + profitValue;
+        }, 0
       );
 
       console.log(`App: Symbol ${symbol} stats:`, {
         totalTrades: symbolTrades.length,
         profitableTrades: profitableTrades.length,
         winRate: winRate,
-        totalProfit: totalProfit.toFixed(2)
+        totalProfit: totalProfit.toFixed(2),
+        note: 'Calculated from Profit column only'
       });
 
       // Fetch new mark to market data for the selected symbol
@@ -164,7 +169,7 @@ function App() {
       const updatedData: BacktestData = {
         ...backtestData,
         currencyPair: symbol,
-        totalProfit: `$${totalProfit.toFixed(2)}`, // REALIZED PROFIT ONLY
+        totalProfit: `$${totalProfit.toFixed(2)}`, // FROM PROFIT COLUMN ONLY
         winRate: `${winRate}%`,
         totalTrades: symbolTrades.length.toString(),
         markToMarketData: newMarkToMarketData
@@ -173,13 +178,13 @@ function App() {
       setBacktestData(updatedData);
       setSelectedSymbol(symbol);
       
-      console.log(`=== APP SYMBOL CHANGE - REALIZED PROFIT ONLY ===`);
-      console.log(`App: Successfully updated data for symbol ${symbol} (REALIZED PROFIT):`, {
+      console.log(`=== APP SYMBOL CHANGE - PROFIT COLUMN ONLY ===`);
+      console.log(`App: Successfully updated data for symbol ${symbol} (PROFIT COLUMN):`, {
         totalTrades: symbolTrades.length,
-        realizedProfit: totalProfit.toFixed(2),
+        profitColumnTotal: totalProfit.toFixed(2),
         winRate: winRate,
         markToMarketDataPoints: newMarkToMarketData.length,
-        note: 'Total Profit = Realized Profit Only (excludes unrealized)'
+        note: 'Total Profit = Profit Column Only (excludes commission, swap, unrealized)'
       });
       console.log('=== END APP SYMBOL CHANGE ===');
       

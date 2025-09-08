@@ -477,8 +477,9 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     
     // Calculate closed P/L up to this point (cumulative)
     const closedTrades = symbolTrades.filter(trade => trade.closeTime <= currentDateTime);
-    runningClosedPnL = closedTrades.reduce((total, trade) => {
-      return total + trade.profit + trade.commission + trade.swap;
+      const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+      console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
+      return sum + profitValue;
     }, 0);
     
     // Find open positions at this time
@@ -670,7 +671,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         console.log('Backtest data processed:', {
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
-          totalProfit: backtestData.totalProfit,
+    console.log(`CSV Parser - Total from Profit Column: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
           availableSymbols: backtestData.availableSymbols,
           markToMarketDataPoints: markToMarketData.length
         });
@@ -678,7 +679,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         resolve(backtestData);
 
       } catch (error) {
-        console.error('Error processing CSV file:', error);
+        totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
         reject(new Error(error instanceof Error ? error.message : 'Failed to parse CSV file'));
       }
     };
