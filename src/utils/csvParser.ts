@@ -381,7 +381,7 @@ const getMarketPriceAtTime = (marketData: MarketDataPoint[], targetTime: Date): 
   return closestPoint.close;
 };
 
-const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selectedSymbol: string, initialBalance: number, csvTimezone: number = 0): Promise<MarkToMarketItem[]> => {
+export const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selectedSymbol: string, initialBalance: number, csvTimezone: number = 0): Promise<MarkToMarketItem[]> => {
   const symbolTrades = completeTrades.filter(trade => trade.symbol === selectedSymbol);
   
   if (symbolTrades.length === 0) {
