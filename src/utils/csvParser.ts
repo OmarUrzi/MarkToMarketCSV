@@ -625,10 +625,10 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
           trade.symbol === mainSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
         );
         const profitableTrades = mainSymbolTrades.filter(trade => parseFloat(trade.profit) > 0);
-        const winRate = mainSymbolTrades.length > 0
-          const netProfit = profit + commission + swap;
-          console.log(`CSV Net Profit - Trade ${trade.deal}: profit=${profit} + commission=${commission} + swap=${swap} = ${netProfit}`);
-          return sum + netProfit;
+        const winRate = mainSymbolTrades.length > 0 
+          ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2) 
+          : '0.00';
+        
         // Calcular max drawdown
         let maxDrawdown = 0;
         let peak = customInitialBalance;
