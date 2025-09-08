@@ -597,23 +597,14 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         
         console.log('CSV Content preview:', csvContent.substring(0, 500));
         
-        console.log('Converting CSV to unified format...');
-        
         let convertedData;
         try {
           // Convertir CSV a formato unificado
           convertedData = convertCSVToUnified(csvContent, csvTimezone, customInitialBalance);
         } catch (error) {
           // If CSV conversion fails, it might be an HTML file
-          console.log('CSV conversion failed, trying HTML conversion:', error.message);
           throw new Error('Invalid CSV format. Please ensure your file has the correct CSV structure with headers and data rows, or upload an HTML backtest report instead.');
         }
-        
-        console.log('CSV converted to unified format:', {
-          symbol: convertedData.metadata.symbol,
-          totalTrades: convertedData.metadata.totalTrades,
-          tradesCount: convertedData.trades.length
-        });
         
         // Procesar usando la lógica existente pero con datos unificados
         const tradeHistory = convertedData.trades;
@@ -622,9 +613,18 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         
         // Calcular estadísticas
         const mainSymbolTrades = tradeHistory.filter(trade => 
-          trade.symbol === mainSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
+          trade.symbol === mainSymbol && (
+            parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0 ||
+            parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0') !== 0 ||
+            parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0') !== 0
+          )
         );
-        const profitableTrades = mainSymbolTrades.filter(trade => parseFloat(trade.profit) > 0);
+        const profitableTrades = mainSymbolTrades.filter(trade => {
+          const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+          const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+          return (profit + commission + swap) > 0;
+        });
         const winRate = mainSymbolTrades.length > 0 
           ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2) 
           : '0.00';
@@ -635,7 +635,12 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         let currentBalance = customInitialBalance;
 
         for (const trade of tradeHistory) {
-          currentBalance = parseFloat(trade.balance);
+          const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+          const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+          const netProfit = profit + commission + swap;
+          
+          currentBalance += netProfit;
           if (currentBalance > peak) {
             peak = currentBalance;
           }
@@ -646,7 +651,6 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         }
         
         // Generar mark-to-market data
-        console.log('Generating mark-to-market data...');
         const completeTrades = convertTradesForMarkToMarket(tradeHistory);
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
         
@@ -667,13 +671,6 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         // Agregar el CSV unificado para descarga
         (backtestData as any).unifiedCSV = convertedData.csvContent;
         
-        console.log('Backtest data processed:', {
-          symbol: backtestData.currencyPair,
-          totalTrades: backtestData.totalTrades,
-          totalProfit: backtestData.totalProfit,
-          availableSymbols: backtestData.availableSymbols,
-          markToMarketDataPoints: markToMarketData.length
-        });
 
         resolve(backtestData);
 
