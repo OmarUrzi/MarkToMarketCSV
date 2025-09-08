@@ -8,9 +8,9 @@ import { NewChartSection } from './components/NewChartSection';
 import { TradeHistory } from './components/TradeHistory';
 import { MarkToMarketAnalytics } from './components/MarkToMarketAnalytics';
 import { BacktestData } from './types';
-import { parseCSVFile, generateMarkToMarketData, convertTradesForMarkToMarket } from './utils/csvParser';
+import { parseHtmlFile, fetchMarkToMarketForSymbol } from './utils/parsers';
+import { parseCSVFile } from './utils/csvParser';
 import { convertXlsxToCSV } from './utils/xlsxToCsvConverter';
-import { convertHtmlToCSV } from './utils/htmlToCsvConverter';
 import { mockBacktestData } from './data/mockData';
 import { TimezoneSelector } from './components/TimezoneSelector';
 
@@ -61,19 +61,8 @@ function App() {
         // Handle CSV file
         data = await parseCSVFile(file, timezone, initialAmount);
       } else if (fileName.endsWith('.htm') || fileName.endsWith('.html')) {
-        // Handle HTML file - convert to CSV first
-        const htmlContent = await file.text();
-        const htmlData = convertHtmlToCSV(htmlContent, timezone, initialAmount);
-        
-        // Create a virtual CSV file and use the existing CSV parser
-        const csvBlob = new Blob([htmlData.csvContent], { type: 'text/csv' });
-        const csvFile = new File([csvBlob], 'converted.csv', { type: 'text/csv' });
-        
-        data = await parseCSVFile(csvFile, timezone, initialAmount);
-        
-        // Update metadata with HTML information
-        data.expertName = htmlData.metadata.expertName;
-        data.totalProfit = `$${htmlData.metadata.totalNetProfit}`;
+        // Handle HTML file
+        data = await parseHtmlFile(file, timezone, initialAmount);
       } else {
         throw new Error('Please upload either an HTML file (.html/.htm) from MT4/MT5 backtest report, a CSV file (.csv) with trade data, or an Excel file (.xlsx/.xls) with trade history');
       }
@@ -144,28 +133,30 @@ function App() {
         : '0.00';
 
       const totalProfit = symbolTrades.reduce((sum, trade) => 
-        sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'), 0
+        {
+          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          console.log(`App Symbol Change - Profit Column: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
+          return sum + profitValue;
+        }, 0
       );
 
       console.log(`App: Symbol ${symbol} stats:`, {
         totalTrades: symbolTrades.length,
         profitableTrades: profitableTrades.length,
         winRate: winRate,
-        totalProfit: totalProfit.toFixed(2)
+        totalProfit: totalProfit.toFixed(2),
+        note: 'Calculated from Profit column only'
       });
 
       // Fetch new mark to market data for the selected symbol
       let newMarkToMarketData = [];
       try {
         console.log(`App: Fetching mark-to-market data for ${symbol}`);
-        const completeTrades = convertTradesForMarkToMarket(backtestData.tradeHistory);
-        newMarkToMarketData = await generateMarkToMarketData(
-          completeTrades,
+        newMarkToMarketData = await fetchMarkToMarketForSymbol(
           symbol,
-          initialAmount,
-          sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') + 
-          parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0') + 
-          parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0'), 0
+          backtestData.tradeHistory,
+          backtestData.initialBalance,
+          csvTimezone
         );
         console.log(`App: Received ${newMarkToMarketData.length} mark-to-market data points for ${symbol}`);
       } catch (error) {
@@ -178,7 +169,7 @@ function App() {
       const updatedData: BacktestData = {
         ...backtestData,
         currencyPair: symbol,
-        totalProfit: `$${totalProfit.toFixed(2)}`,
+        totalProfit: `$${totalProfit.toFixed(2)}`, // FROM PROFIT COLUMN ONLY
         winRate: `${winRate}%`,
         totalTrades: symbolTrades.length.toString(),
         markToMarketData: newMarkToMarketData
@@ -187,13 +178,15 @@ function App() {
       setBacktestData(updatedData);
       setSelectedSymbol(symbol);
       
-      console.log(`App: Successfully updated data for symbol ${symbol}:`, {
+      console.log(`=== APP SYMBOL CHANGE - PROFIT COLUMN ONLY ===`);
+      console.log(`App: Successfully updated data for symbol ${symbol} (PROFIT COLUMN):`, {
         totalTrades: symbolTrades.length,
-        totalProfit: totalProfit.toFixed(2),
+        profitColumnTotal: totalProfit.toFixed(2),
         winRate: winRate,
-        markToMarketDataPoints: newMarkToMarketData.length
+        markToMarketDataPoints: newMarkToMarketData.length,
+        note: 'Total Profit = Profit Column Only (excludes commission, swap, unrealized)'
       });
-      console.log('=== SYMBOL CHANGE END ===');
+      console.log('=== END APP SYMBOL CHANGE ===');
       
     } catch (error) {
       console.error('=== SYMBOL CHANGE FAILED ===');

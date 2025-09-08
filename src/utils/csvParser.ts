@@ -381,7 +381,7 @@ const getMarketPriceAtTime = (marketData: MarketDataPoint[], targetTime: Date): 
   return closestPoint.close;
 };
 
-export const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selectedSymbol: string, initialBalance: number, csvTimezone: number = 0): Promise<MarkToMarketItem[]> => {
+const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selectedSymbol: string, initialBalance: number, csvTimezone: number = 0): Promise<MarkToMarketItem[]> => {
   const symbolTrades = completeTrades.filter(trade => trade.symbol === selectedSymbol);
   
   if (symbolTrades.length === 0) {
@@ -477,8 +477,10 @@ export const generateMarkToMarketData = async (completeTrades: CompleteTrade[], 
     
     // Calculate closed P/L up to this point (cumulative)
     const closedTrades = symbolTrades.filter(trade => trade.closeTime <= currentDateTime);
-    runningClosedPnL = closedTrades.reduce((total, trade) => {
-      return total + trade.profit + trade.commission + trade.swap;
+    const totalRealizedProfit = closedTrades.reduce((sum, trade) => {
+      const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
+      console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
+      return sum + profitValue;
     }, 0);
     
     // Find open positions at this time
@@ -546,7 +548,7 @@ export const generateMarkToMarketData = async (completeTrades: CompleteTrade[], 
     const aep = totalWeightedVolume > 0 ? weightedAveragePrice / totalWeightedVolume : 0;
     
     // Calculate total P/L and drawdown
-    const totalPnL = runningClosedPnL + openPnL;
+    const totalPnL = totalRealizedProfit; // CRITICAL: Total P/L = REALIZED PROFIT ONLY
     const currentBalance = initialBalance + totalPnL;
     
     // Update peak balance for drawdown calculation
@@ -562,12 +564,12 @@ export const generateMarkToMarketData = async (completeTrades: CompleteTrade[], 
     markToMarketData.push({
       date: formattedDate,
       position: netPosition.toFixed(2), // Net position (positive = long, negative = short)
-      closed: `$${runningClosedPnL.toFixed(2)}`, // Realized P/L from closed trades
+      closed: `$${totalRealizedProfit.toFixed(2)}`, // Realized P/L from closed trades
       aep: `$${aep.toFixed(5)}`, // Average Entry Price of open positions
       eoPeriodPrice: `$${finalMarketPrice.toFixed(5)}`, // Current market price
       currentFX: '1.00', // Conversion rate (assuming USD base)
       open: `$${openPnL.toFixed(2)}`, // Unrealized P/L from open positions
-      total: `$${totalPnL.toFixed(2)}`, // Total P/L (realized + unrealized)
+      total: `$${totalPnL.toFixed(2)}`, // Total P/L = REALIZED ONLY (excludes unrealized)
       trades: openTradesWithPnL, // Details of open trades
       openTradesCount: openTrades.length.toString(), // Number of open trades
       currentDrawdown: `${currentDrawdown.toFixed(2)}%` // Current drawdown percentage
@@ -625,8 +627,8 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
           trade.symbol === mainSymbol && parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') !== 0
         );
         const profitableTrades = mainSymbolTrades.filter(trade => parseFloat(trade.profit) > 0);
-        const winRate = mainSymbolTrades.length > 0 
-          ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2) 
+        const winRate = mainSymbolTrades.length > 0
+          ? ((profitableTrades.length / mainSymbolTrades.length) * 100).toFixed(2)
           : '0.00';
         
         // Calcular max drawdown
@@ -650,6 +652,12 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         const completeTrades = convertTradesForMarkToMarket(tradeHistory);
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
         
+        const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
+          const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
+          console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
+          return sum + profitValue;
+        }, 0);
+        
         const backtestData: BacktestData = {
           currencyPair: mainSymbol,
           expertName: convertedData.metadata.expertName,
@@ -670,7 +678,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         console.log('Backtest data processed:', {
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
-          totalProfit: backtestData.totalProfit,
+          totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
           availableSymbols: backtestData.availableSymbols,
           markToMarketDataPoints: markToMarketData.length
         });
@@ -678,7 +686,6 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         resolve(backtestData);
 
       } catch (error) {
-        console.error('Error processing CSV file:', error);
         reject(new Error(error instanceof Error ? error.message : 'Failed to parse CSV file'));
       }
     };
@@ -689,7 +696,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
 };
 
 // Función auxiliar para convertir trades a formato para mark-to-market
-export const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
+const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
   const completeTrades: CompleteTrade[] = [];
   const openTrades = new Map<string, TradeHistoryItem>();
   

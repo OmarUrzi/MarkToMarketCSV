@@ -53,10 +53,11 @@ export interface ProfitCalculationSources {
       formula: 'For BUY: (currentPrice - entryPrice) * volume * contractSize';
       formula2: 'For SELL: (entryPrice - currentPrice) * volume * contractSize';
       contractSize: '100,000 for forex pairs';
+      note: 'Open P/L is calculated but NOT included in total profit',
     };
     totalPnL: {
-      formula: 'closedPnL + openPnL';
-      description: 'Total profit including unrealized gains/losses';
+      formula: 'closedPnL only',
+      description: 'Total profit from realized trades only (excludes unrealized)',
     };
   };
 }

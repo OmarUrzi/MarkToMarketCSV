@@ -65,14 +65,13 @@ export const convertXlsxToCSV = (file: File, csvTimezone: number = 0, customInit
         
         // Calcular profit total
         const completeTrades = trades.filter(t => t.direction === 'out');
-        const totalProfit = completeTrades.reduce((sum, trade) => {
-          const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-          const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
-          const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
-          const netProfit = profit + commission + swap;
-          console.log(`XLSX Net Profit - Trade ${trade.deal}: profit=${profit} + commission=${commission} + swap=${swap} = ${netProfit}`);
-          return sum + netProfit;
+        const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
+          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          console.log(`XLSX Converter - Profit Column Calculation: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
+          return sum + profitValue;
         }, 0);
+        
+        console.log(`XLSX Converter - Total from Profit Column: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
         
         const result: ConvertedXLSXData = {
           csvContent,
@@ -80,7 +79,7 @@ export const convertXlsxToCSV = (file: File, csvTimezone: number = 0, customInit
           metadata: {
             ...metadata,
             initialBalance: customInitialBalance,
-            totalNetProfit: totalProfit.toFixed(2),
+            totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
             totalTrades: completeTrades.length
           }
         };
