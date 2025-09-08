@@ -689,7 +689,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
 };
 
 // Función auxiliar para convertir trades a formato para mark-to-market
-const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
+export const convertTradesForMarkToMarket = (trades: TradeHistoryItem[]): CompleteTrade[] => {
   const completeTrades: CompleteTrade[] = [];
   const openTrades = new Map<string, TradeHistoryItem>();
   
