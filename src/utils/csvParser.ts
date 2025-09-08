@@ -477,8 +477,8 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     
     // Calculate closed P/L up to this point (cumulative)
     const closedTrades = symbolTrades.filter(trade => trade.closeTime <= currentDateTime);
-    const runningClosedPnL = closedTrades.reduce((sum, trade) => {
-      const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+    const totalRealizedProfit = closedTrades.reduce((sum, trade) => {
+      const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
       console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
       return sum + profitValue;
     }, 0);
@@ -548,7 +548,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     const aep = totalWeightedVolume > 0 ? weightedAveragePrice / totalWeightedVolume : 0;
     
     // Calculate total P/L and drawdown
-   const totalPnL = runningClosedPnL; // CRITICAL: Total P/L = REALIZED PROFIT ONLY
+    const totalPnL = totalRealizedProfit; // CRITICAL: Total P/L = REALIZED PROFIT ONLY
     const currentBalance = initialBalance + totalPnL;
     
     // Update peak balance for drawdown calculation
@@ -564,12 +564,12 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     markToMarketData.push({
       date: formattedDate,
       position: netPosition.toFixed(2), // Net position (positive = long, negative = short)
-      closed: `$${runningClosedPnL.toFixed(2)}`, // Realized P/L from closed trades
+      closed: `$${totalRealizedProfit.toFixed(2)}`, // Realized P/L from closed trades
       aep: `$${aep.toFixed(5)}`, // Average Entry Price of open positions
       eoPeriodPrice: `$${finalMarketPrice.toFixed(5)}`, // Current market price
       currentFX: '1.00', // Conversion rate (assuming USD base)
       open: `$${openPnL.toFixed(2)}`, // Unrealized P/L from open positions
-     total: `$${totalPnL.toFixed(2)}`, // Total P/L = REALIZED ONLY (excludes unrealized)
+      total: `$${totalPnL.toFixed(2)}`, // Total P/L = REALIZED ONLY (excludes unrealized)
       trades: openTradesWithPnL, // Details of open trades
       openTradesCount: openTrades.length.toString(), // Number of open trades
       currentDrawdown: `${currentDrawdown.toFixed(2)}%` // Current drawdown percentage
@@ -652,6 +652,12 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         const completeTrades = convertTradesForMarkToMarket(tradeHistory);
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
         
+        const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
+          const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
+          console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
+          return sum + profitValue;
+        }, 0);
+        
         const backtestData: BacktestData = {
           currencyPair: mainSymbol,
           expertName: convertedData.metadata.expertName,
@@ -672,7 +678,7 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         console.log('Backtest data processed:', {
           symbol: backtestData.currencyPair,
           totalTrades: backtestData.totalTrades,
-    console.log(`CSV Parser - Total from Profit Column: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
+          totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
           availableSymbols: backtestData.availableSymbols,
           markToMarketDataPoints: markToMarketData.length
         });
@@ -680,7 +686,6 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         resolve(backtestData);
 
       } catch (error) {
-        totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
         reject(new Error(error instanceof Error ? error.message : 'Failed to parse CSV file'));
       }
     };
