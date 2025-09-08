@@ -352,9 +352,11 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
   const symbolTrades = completeTrades.filter(trade => trade.symbol === selectedSymbol);
   
   if (symbolTrades.length === 0) {
+    console.log(`No trades found for symbol ${selectedSymbol}`);
     return [];
   }
 
+  console.log(`Generating M2M data for ${selectedSymbol} with ${symbolTrades.length} trades`);
 
   // Get the date range using the first trade's entry time
   const firstTrade = symbolTrades.reduce((earliest, trade) => 
@@ -364,6 +366,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     trade.closeTime > latest.closeTime ? trade : latest
   );
 
+  console.log(`Date range: ${firstTrade.openTime.toISOString()} to ${lastTrade.closeTime.toISOString()}`);
 
   let marketDataPoints: MarketDataPoint[] = [];
   
@@ -395,8 +398,17 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
         return new Date(point.time).getTime() >= firstTradeTime;
       });
 
+    console.log(`Successfully fetched ${marketDataPoints.length} market data points for ${selectedSymbol}`);
+    
+    if (marketDataPoints.length > 0) {
+      console.log(`First trade time: ${firstTrade.openTime.toISOString()}`);
+      console.log(`First raw API data point: ${marketDataPoints[0]?.time}`);
+      console.log(`First adjusted API data point: ${marketDataPoints[0]?.time}`);
+    }
   } catch (error) {
+    console.error('Failed to fetch market data:', error);
     // Continue without market data - we'll use trade prices as fallback
+    console.log('Continuing with trade prices as fallback for market data');
   }
 
   // Create comprehensive mark-to-market data
@@ -434,6 +446,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     const closedTrades = symbolTrades.filter(trade => trade.closeTime <= currentDateTime);
     const totalRealizedProfit = closedTrades.reduce((sum, trade) => {
       const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
+      console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
       return sum + profitValue;
     }, 0);
     
@@ -530,6 +543,7 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     });
   }
 
+  console.log(`Generated ${markToMarketData.length} M2M data points for ${selectedSymbol}`);
   return markToMarketData;
 };
 
@@ -594,9 +608,9 @@ export const parseCSVFile = async (file: File, csvTimezone: number = 0, customIn
         const markToMarketData = await generateMarkToMarketData(completeTrades, mainSymbol, customInitialBalance, csvTimezone);
         
         const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
-          const profitValue = parseFloat(trade.profit.toString().replace(/[^\d.-]/g, '') || '0');
-          const commissionValue = parseFloat(trade.commission.toString().replace(/[^\d.-]/g, '') || '0');
-          const swapValue = parseFloat(trade.swap.toString().replace(/[^\d.-]/g, '') || '0');
+          const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          const commissionValue = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+          const swapValue = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
           const totalValue = profitValue + commissionValue + swapValue;
           return sum + totalValue;
         }, 0);
