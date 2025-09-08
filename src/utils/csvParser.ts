@@ -477,8 +477,9 @@ const generateMarkToMarketData = async (completeTrades: CompleteTrade[], selecte
     
     // Calculate closed P/L up to this point (cumulative)
     const closedTrades = symbolTrades.filter(trade => trade.closeTime <= currentDateTime);
+    const runningClosedPnL = closedTrades.reduce((sum, trade) => {
       const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-      console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
+      console.log(`CSV Parser - Profit Column Calculation: Trade ${trade.position} profit="${trade.profit}" -> ${profitValue}`);
       return sum + profitValue;
     }, 0);
     
