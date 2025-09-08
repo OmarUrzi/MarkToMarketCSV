@@ -144,7 +144,9 @@ function App() {
         : '0.00';
 
       const totalProfit = symbolTrades.reduce((sum, trade) => 
-        sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'), 0
+        sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') + 
+        parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0') + 
+        parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0'), 0
       );
 
       console.log(`App: Symbol ${symbol} stats:`, {
