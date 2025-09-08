@@ -132,14 +132,9 @@ function App() {
         ? ((profitableTrades.length / symbolTrades.length) * 100).toFixed(2)
         : '0.00';
 
-      const totalProfit = symbolTrades.reduce((sum, trade) => {
-        const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-        const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
-        const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
-        const netProfit = profit - commission - swap;
-        console.log(`App Symbol Change Net Profit - Trade ${trade.deal}: profit=${profit} - commission=${commission} - swap=${swap} = ${netProfit}`);
-        return sum + netProfit;
-      }, 0);
+      const totalProfit = symbolTrades.reduce((sum, trade) => 
+        sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0'), 0
+      );
 
       console.log(`App: Symbol ${symbol} stats:`, {
         totalTrades: symbolTrades.length,
@@ -155,8 +150,14 @@ function App() {
         newMarkToMarketData = await fetchMarkToMarketForSymbol(
           symbol,
           backtestData.tradeHistory,
-          csvTimezone
-        );
+        const totalProfit = symbolTrades.reduce((sum, trade) => {
+          const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
+          const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
+          const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
+          const netProfit = profit - commission - swap;
+          console.log(`App Symbol Change Net Profit - Trade ${trade.deal}: profit=${profit} - commission=${commission} - swap=${swap} = ${netProfit}`);
+          return sum + netProfit;
+        }, 0);
         console.log(`App: Received ${newMarkToMarketData.length} mark-to-market data points for ${symbol}`);
       } catch (error) {
         console.error('App: Failed to fetch market data for symbol:', symbol, error);

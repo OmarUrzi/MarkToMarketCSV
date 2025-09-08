@@ -140,7 +140,8 @@ export const calculateDetailedReturns = (
     const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
     const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
     const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
-    startingBalance += profit + commission + swap;
+    const netProfit = profit - commission - swap;
+    startingBalance += netProfit;
   }
 
   // Create 15-minute intervals for the entire month
@@ -319,8 +320,7 @@ const calculateRealizedDrawdown = (
     const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
     const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
     
-    const netProfit = profit - commission - swap;
-    runningBalance += netProfit;
+    runningBalance += profit + commission + swap;
     
     // Update peak if current balance is higher
     if (runningBalance > peakBalance) {
