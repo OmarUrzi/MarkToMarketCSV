@@ -31,17 +31,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Parse the profit value, removing the $ sign
   const profitValue = parseFloat(totalProfit.replace('$', ''));
   
-  console.log('=== DASHBOARD TOTAL NET PROFIT ===');
-  console.log('Dashboard Profit Display (REALIZED ONLY):', {
+  console.log('Dashboard Profit Display:', {
     rawTotalProfit: totalProfit,
     parsedValue: profitValue,
     selectedSymbol,
-    dataSource: 'PROFIT COLUMN from closed trades only',
-    calculation: 'Sum of PROFIT COLUMN values for CLOSED trades of selected symbol',
-    excludes: 'Commission, Swap, and Unrealized profit from open positions',
-    note: 'Uses only the Profit column data, not commission or swap'
+    dataSource: 'Calculated from filtered trade records',
+    calculation: 'Sum of (profit + commission + swap) for selected symbol'
   });
-  console.log('=== END DASHBOARD PROFIT DISPLAY ===');
 
   const handleNewUpload = () => {
     window.location.reload();

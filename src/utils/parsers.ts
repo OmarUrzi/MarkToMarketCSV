@@ -115,7 +115,7 @@ const calculateMarkToMarket = (
       ? (marketPrice - trade.entryPrice) * trade.volume * 100000
       : (trade.entryPrice - marketPrice) * trade.volume * 100000;
     
-   const totalPnL = symbolClosedPnL; // IMPORTANT: Total P/L = Realized profit ONLY (no unrealized)
+    totalVolume += trade.type === 'buy' ? trade.volume : -trade.volume;
     openPnL += pnl;
     weightedAveragePrice += trade.entryPrice * trade.volume;
     totalWeightedVolume += trade.volume;
@@ -135,18 +135,17 @@ const calculateMarkToMarket = (
 
   // Calculate closed P/L for this symbol only
   const symbolClosedPnL = symbolTrades.reduce((total, trade) => {
-    // Extract profit from the Profit column (not swap or commission)
     const rawProfit = trade.profit.replace(/[^\d.-]/g, '') || '0';
     const numericProfit = parseFloat(rawProfit);
-    console.log(`Profit calculation - Trade ${trade.deal}: Profit column="${trade.profit}" -> cleaned="${rawProfit}" -> numeric=${numericProfit}`);
-    return total + numericProfit;
+    console.log(`Profit calculation - Trade ${trade.deal}: raw="${trade.profit}" -> cleaned="${rawProfit}" -> numeric=${numericProfit}`);
+    return total + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
   }, 0);
   
-  console.log(`Total REALIZED PROFIT for ${selectedSymbol}: $${symbolClosedPnL.toFixed(2)} from ${symbolTrades.length} trades (Profit column only)`);
+  console.log(`Total closed P/L for ${selectedSymbol}: $${symbolClosedPnL.toFixed(2)} from ${symbolTrades.length} trades`);
 
   // Calculate drawdown - we need to track peak balance over time
   // For now, we'll use a simplified calculation based on current balance vs initial
-  const totalPnL = symbolClosedPnL; // Only use realized profit for total
+  const totalPnL = symbolClosedPnL + openPnL;
   const currentTotalBalance = initialBalance + totalPnL;
   const peakBalance = Math.max(initialBalance, currentTotalBalance);
   const currentDrawdown = peakBalance > 0 ? ((peakBalance - currentTotalBalance) / peakBalance) * 100 : 0;
@@ -158,8 +157,8 @@ const calculateMarkToMarket = (
     aep: `$${aep.toFixed(5)}`,
     eoPeriodPrice: `$${marketPrice.toFixed(5)}`,
     currentFX: '1.00',
-    total: `$${symbolClosedPnL.toFixed(2)}`, // Total now equals closed (realized only)
-     total: `$${symbolClosedPnL.toFixed(2)}`, // Total = Profit column only (REALIZED)
+    open: `$${openPnL.toFixed(2)}`,
+    total: `$${(symbolClosedPnL + openPnL).toFixed(2)}`,
     trades: tradesWithPnL,
     openTradesCount: openTrades.length.toString(),
     currentDrawdown: `${Math.max(0, currentDrawdown).toFixed(2)}%`

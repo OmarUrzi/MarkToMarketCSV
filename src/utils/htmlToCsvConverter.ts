@@ -353,13 +353,10 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
 
   // Calcular estadísticas
   const completeTrades = trades.filter(t => t.direction === 'out');
-  const totalRealizedProfit = completeTrades.reduce((sum, trade) => {
-    const profitValue = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
-    console.log(`HTML Converter - Profit Column Calculation: Trade ${trade.deal} profit="${trade.profit}" -> ${profitValue}`);
-    return sum + profitValue;
+  const totalProfit = completeTrades.reduce((sum, trade) => {
+    return sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
   }, 0);
 
-  console.log(`HTML Converter - Total from Profit Column: $${totalRealizedProfit.toFixed(2)} from ${completeTrades.length} closed trades`);
   return {
     csvContent, // Retornar el CSV original
     trades,
@@ -367,7 +364,7 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
       symbol: mainSymbol,
       expertName: 'CSV Import',
       initialBalance: customInitialBalance,
-      totalNetProfit: totalRealizedProfit.toFixed(2), // FROM PROFIT COLUMN ONLY
+      totalNetProfit: totalProfit.toFixed(2),
       totalTrades: completeTrades.length
     }
   };
