@@ -35,8 +35,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
     rawTotalProfit: totalProfit,
     parsedValue: profitValue,
     selectedSymbol,
-    dataSource: 'Calculated from filtered trade records (closed trades only)',
-    calculation: 'Sum of (profit - commission - swap) for selected symbol'
+    dataSource: 'Calculated from filtered trade records (closed trades only)', 
+    calculation: 'Sum of (profit + commission + swap) for selected symbol'
   });
 
   const handleNewUpload = () => {

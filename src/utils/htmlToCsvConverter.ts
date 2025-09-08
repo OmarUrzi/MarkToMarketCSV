@@ -357,8 +357,8 @@ export const convertCSVToUnified = (csvContent: string, csvTimezone: number = 0,
     const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
     const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
     const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
-    const netProfit = profit - commission - swap;
-    console.log(`HTML Net Profit - Trade ${trade.deal}: profit=${profit} - commission=${commission} - swap=${swap} = ${netProfit}`);
+    const netProfit = profit + commission + swap;
+    console.log(`HTML Net Profit - Trade ${trade.deal}: profit=${profit} + commission=${commission} + swap=${swap} = ${netProfit}`);
     return sum + netProfit;
   }, 0);
 
@@ -659,4 +659,8 @@ const findDealsTable = (doc: Document): HTMLTableElement | null => {
   }
 
   return null;
+};
+
+const formatDateForCSVDirect = (dateStr: string): string => {
+  return dateStr;
 };
