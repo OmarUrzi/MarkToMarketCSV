@@ -165,9 +165,7 @@ function App() {
           completeTrades,
           symbol,
           initialAmount,
-          sum + parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') + 
-          parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0') + 
-          parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0'), 0
+          csvTimezone
         );
         console.log(`App: Received ${newMarkToMarketData.length} mark-to-market data points for ${symbol}`);
       } catch (error) {
