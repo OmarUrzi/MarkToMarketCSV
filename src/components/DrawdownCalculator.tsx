@@ -114,7 +114,7 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
         peakBalance = currentBalance;
         peakDate = currentPoint.time;
         peakIndex = i;
-        console.log(`New peak at ${trade.time}: $${peakBalance.toFixed(2)} (was $${oldPeak.toFixed(2)})`);
+        console.log(`New peak at ${currentPoint.time}: $${peakBalance.toFixed(2)} (was $${oldPeak.toFixed(2)})`);
         
         // If we were in drawdown and recovered, end the drawdown event
         if (inDrawdown) {
