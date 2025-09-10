@@ -14,12 +14,16 @@ interface DrawdownCalculatorProps {
 interface DrawdownEvent {
   startDate: string;
   endDate: string;
+  peakTimestamp: string;
   peakBalance: number;
+  valleyTimestamp: string;
+  valleyBalance: number;
   troughBalance: number;
   drawdownPercent: number;
   drawdownAmount: number;
   duration: number; // in hours
   recoveryDate?: string;
+  recoveryTimestamp?: string;
   recoveryDuration?: number; // in hours
   triggerTrades: TradeHistoryItem[];
   tradeTypes: {
@@ -52,8 +56,10 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     console.log('Initial balance:', initialBalance);
 
     const events: DrawdownEvent[] = [];
-    let peakBalance = initialBalance;
-    let peakDate = '';
+    let currentPeakBalance = initialBalance;
+    let currentPeakTimestamp = '';
+    let currentValleyBalance = initialBalance;
+    let currentValleyTimestamp = '';
     let inDrawdown = false;
     let drawdownStart = '';
     let drawdownTrades: TradeHistoryItem[] = [];
@@ -66,6 +72,17 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     console.log('Processing', sortedTrades.length, 'trades for calculator');
 
     let runningBalance = initialBalance;
+    
+    // Track balance history for accurate peak/valley detection
+    const balanceHistory: Array<{
+      timestamp: string;
+      balance: number;
+      trade: TradeHistoryItem;
+    }> = [{
+      timestamp: sortedTrades[0]?.time || new Date().toISOString(),
+      balance: initialBalance,
+      trade: sortedTrades[0]
+    }];
 
     for (let i = 0; i < sortedTrades.length; i++) {
       const trade = sortedTrades[i];
@@ -77,19 +94,27 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
       
       const netProfit = profit + commission + swap;
       runningBalance += netProfit;
+      
+      // Add to balance history
+      balanceHistory.push({
+        timestamp: trade.time,
+        balance: runningBalance,
+        trade: trade
+      });
 
       // Update peak if current balance is higher
-      if (runningBalance > peakBalance) {
-        const oldPeak = peakBalance;
-        peakBalance = runningBalance;
-        peakDate = trade.time;
-        console.log(`New peak at ${trade.time}: $${peakBalance.toFixed(2)} (was $${oldPeak.toFixed(2)})`);
+      if (runningBalance > currentPeakBalance) {
+        const oldPeak = currentPeakBalance;
+        currentPeakBalance = runningBalance;
+        currentPeakTimestamp = trade.time;
+        console.log(`New peak at ${trade.time}: $${currentPeakBalance.toFixed(2)} (was $${oldPeak.toFixed(2)})`);
         
         // If we were in drawdown and recovered, end the drawdown event
         if (inDrawdown) {
           const lastEvent = events[events.length - 1];
           if (lastEvent) {
             lastEvent.recoveryDate = trade.time;
+            lastEvent.recoveryTimestamp = trade.time;
             // Recovery duration is from drawdown START to full recovery
             lastEvent.recoveryDuration = 
               (new Date(trade.time).getTime() - new Date(lastEvent.startDate).getTime()) / (1000 * 60 * 60);
@@ -97,20 +122,30 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           }
           inDrawdown = false;
           drawdownTrades = [];
+          // Reset valley tracking for new cycle
+          currentValleyBalance = runningBalance;
+          currentValleyTimestamp = trade.time;
         }
+      } else if (runningBalance < currentValleyBalance || !inDrawdown) {
+        // Update valley (lowest point since last peak)
+        currentValleyBalance = runningBalance;
+        currentValleyTimestamp = trade.time;
       }
 
       // Calculate current drawdown
-      const drawdownPercent = peakBalance > 0 ? 
-        ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
-      const drawdownAmount = peakBalance - runningBalance;
+      const drawdownPercent = currentPeakBalance > 0 ? 
+        ((currentPeakBalance - runningBalance) / currentPeakBalance) * 100 : 0;
+      const drawdownAmount = currentPeakBalance - runningBalance;
 
       // Check if we hit the threshold
       if (drawdownPercent >= thresholdPercent && !inDrawdown) {
         inDrawdown = true;
         drawdownStart = trade.time;
         drawdownTrades = [];
-        console.log(`Drawdown started at ${trade.time}: ${drawdownPercent.toFixed(2)}% (Balance: $${runningBalance.toFixed(2)}, Peak: $${peakBalance.toFixed(2)})`);
+        // Reset valley to current balance when drawdown starts
+        currentValleyBalance = runningBalance;
+        currentValleyTimestamp = trade.time;
+        console.log(`Drawdown started at ${trade.time}: ${drawdownPercent.toFixed(2)}% (Balance: $${runningBalance.toFixed(2)}, Peak: $${currentPeakBalance.toFixed(2)})`);
       }
 
       // If in drawdown, collect trades
@@ -147,9 +182,11 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           if (drawdownPercent > event.drawdownPercent) {
             console.log(`Updating drawdown event: ${drawdownPercent.toFixed(2)}% at ${trade.time}`);
             event.endDate = trade.time;
+            event.valleyTimestamp = currentValleyTimestamp;
+            event.valleyBalance = currentValleyBalance;
             event.troughBalance = runningBalance;
             event.drawdownPercent = drawdownPercent;
-            event.drawdownAmount = drawdownAmount;
+            event.drawdownAmount = currentPeakBalance - currentValleyBalance;
             event.duration = (new Date(trade.time).getTime() - new Date(event.startDate).getTime()) / (1000 * 60 * 60);
             event.triggerTrades = [...filteredTriggerTrades];
             event.tradeTypes = tradeTypes;
@@ -160,10 +197,13 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           events.push({
             startDate: drawdownStart,
             endDate: trade.time,
-            peakBalance,
+            peakTimestamp: currentPeakTimestamp,
+            peakBalance: currentPeakBalance,
+            valleyTimestamp: currentValleyTimestamp,
+            valleyBalance: currentValleyBalance,
             troughBalance: runningBalance,
             drawdownPercent,
-            drawdownAmount,
+            drawdownAmount: currentPeakBalance - currentValleyBalance,
             duration: (new Date(trade.time).getTime() - new Date(drawdownStart).getTime()) / (1000 * 60 * 60),
             triggerTrades: [...filteredTriggerTrades],
             tradeTypes
@@ -176,8 +216,11 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     console.log('Total events found:', events.length);
     events.forEach((event, index) => {
       console.log(`Event ${index + 1}: ${event.drawdownPercent.toFixed(2)}% from ${event.startDate} to ${event.endDate}`);
+      console.log(`  Peak: $${event.peakBalance.toFixed(2)} at ${event.peakTimestamp}`);
+      console.log(`  Valley: $${event.valleyBalance.toFixed(2)} at ${event.valleyTimestamp}`);
+      console.log(`  Drawdown Amount: $${event.drawdownAmount.toFixed(2)}`);
       if (event.recoveryDate) {
-        console.log(`  Recovery: ${event.recoveryDate} (${event.recoveryDuration?.toFixed(1)}h total)`);
+        console.log(`  Recovery: ${event.recoveryTimestamp} (${event.recoveryDuration?.toFixed(1)}h total)`);
       }
     });
     console.log('=== END DRAWDOWN CALCULATOR CALCULATION ===');
@@ -637,31 +680,31 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                 #
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Start Date
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                End Date
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Drawdown %
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Duration
+                Peak Timestamp
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Peak Balance
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Trough Balance
+                Valley Timestamp
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Valley Balance
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Drawdown %
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Drawdown Amount
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Duration
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Buy/Sell Trades
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Recovery
+                Recovery Timestamp
               </th>
             </tr>
           </thead>
@@ -693,25 +736,25 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                       {index + 1}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(event.startDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(event.endDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                      {event.drawdownPercent.toFixed(2)}%
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                      {formatCurrency(event.drawdownAmount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {event.duration.toFixed(1)}h
+                      {formatDate(event.peakTimestamp)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(event.peakBalance)}
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
+                      {formatDate(event.valleyTimestamp)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
+                      {formatCurrency(event.valleyBalance)}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(event.troughBalance)}
+                      {event.drawdownPercent.toFixed(2)}%
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {formatCurrency(event.drawdownAmount)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {event.duration.toFixed(1)}h
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex space-x-2">
@@ -727,11 +770,11 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {event.recoveryDate ? (
+                      {event.recoveryTimestamp ? (
                         <div>
                           <div className="text-green-600 font-medium">Recovered</div>
                           <div className="text-xs text-gray-500">
-                            {formatDate(event.recoveryDate)}
+                            {formatDate(event.recoveryTimestamp)}
                           </div>
                           <div className="text-xs text-gray-500">
                             Total Duration: {event.recoveryDuration?.toFixed(1)}h
