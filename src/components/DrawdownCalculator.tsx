@@ -52,8 +52,6 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
     console.log('Initial balance:', initialBalance);
 
     const events: DrawdownEvent[] = [];
-    let peakBalance = initialBalance;
-    let peakDate = '';
     let inDrawdown = false;
     let drawdownStart = '';
     let drawdownTrades: TradeHistoryItem[] = [];
@@ -65,35 +63,68 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
 
     console.log('Processing', sortedTrades.length, 'trades for calculator');
 
+    // Calculate balance history from trades
+    const balanceHistory: { time: string; balance: number; trade: TradeHistoryItem }[] = [];
     let runningBalance = initialBalance;
-
-    for (let i = 0; i < sortedTrades.length; i++) {
-      const trade = sortedTrades[i];
-      
-      // Calculate new balance after this trade
+    
+    // Add initial balance point
+    if (sortedTrades.length > 0) {
+      balanceHistory.push({
+        time: sortedTrades[0].time,
+        balance: initialBalance,
+        trade: sortedTrades[0]
+      });
+    }
+    
+    // Calculate running balance for each trade
+    for (const trade of sortedTrades) {
       const profit = parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0');
       const commission = parseFloat(trade.commission.replace(/[^\d.-]/g, '') || '0');
       const swap = parseFloat(trade.swap.replace(/[^\d.-]/g, '') || '0');
       
       const netProfit = profit + commission + swap;
       runningBalance += netProfit;
+      
+      balanceHistory.push({
+        time: trade.time,
+        balance: runningBalance,
+        trade: trade
+      });
+    }
+    
+    console.log('Balance history calculated:', balanceHistory.length, 'points');
+    console.log('Balance range:', 
+      Math.min(...balanceHistory.map(h => h.balance)).toFixed(2), 
+      'to', 
+      Math.max(...balanceHistory.map(h => h.balance)).toFixed(2)
+    );
+    
+    // Track peak and drawdown detection
+    let peakBalance = initialBalance;
+    let peakDate = balanceHistory[0]?.time || '';
+    let peakIndex = 0;
+
+    for (let i = 0; i < balanceHistory.length; i++) {
+      const currentPoint = balanceHistory[i];
+      const currentBalance = currentPoint.balance;
 
       // Update peak if current balance is higher
-      if (runningBalance > peakBalance) {
+      if (currentBalance > peakBalance) {
         const oldPeak = peakBalance;
-        peakBalance = runningBalance;
-        peakDate = trade.time;
+        peakBalance = currentBalance;
+        peakDate = currentPoint.time;
+        peakIndex = i;
         console.log(`New peak at ${trade.time}: $${peakBalance.toFixed(2)} (was $${oldPeak.toFixed(2)})`);
         
         // If we were in drawdown and recovered, end the drawdown event
         if (inDrawdown) {
           const lastEvent = events[events.length - 1];
           if (lastEvent) {
-            lastEvent.recoveryDate = trade.time;
+            lastEvent.recoveryDate = currentPoint.time;
             // Recovery duration is from drawdown START to full recovery
             lastEvent.recoveryDuration = 
-              (new Date(trade.time).getTime() - new Date(lastEvent.startDate).getTime()) / (1000 * 60 * 60);
-            console.log(`Recovery completed at ${trade.time}, total duration: ${lastEvent.recoveryDuration.toFixed(1)}h`);
+              (new Date(currentPoint.time).getTime() - new Date(lastEvent.startDate).getTime()) / (1000 * 60 * 60);
+            console.log(`Recovery completed at ${currentPoint.time}, total duration: ${lastEvent.recoveryDuration.toFixed(1)}h`);
           }
           inDrawdown = false;
           drawdownTrades = [];
@@ -102,20 +133,26 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
 
       // Calculate current drawdown
       const drawdownPercent = peakBalance > 0 ? 
-        ((peakBalance - runningBalance) / peakBalance) * 100 : 0;
-      const drawdownAmount = peakBalance - runningBalance;
+        ((peakBalance - currentBalance) / peakBalance) * 100 : 0;
+      const drawdownAmount = peakBalance - currentBalance;
 
       // Check if we hit the threshold
       if (drawdownPercent >= thresholdPercent && !inDrawdown) {
         inDrawdown = true;
-        drawdownStart = trade.time;
+        drawdownStart = currentPoint.time;
         drawdownTrades = [];
-        console.log(`Drawdown started at ${trade.time}: ${drawdownPercent.toFixed(2)}% (Balance: $${runningBalance.toFixed(2)}, Peak: $${peakBalance.toFixed(2)})`);
+        console.log(`Drawdown started at ${currentPoint.time}: ${drawdownPercent.toFixed(2)}% (Balance: $${currentBalance.toFixed(2)}, Peak: $${peakBalance.toFixed(2)})`);
       }
 
       // If in drawdown, collect trades
       if (inDrawdown) {
-        drawdownTrades.push(trade);
+        // Find trades that contributed to this drawdown (from peak to current point)
+        const tradesInDrawdown = balanceHistory
+          .slice(peakIndex, i + 1)
+          .map(point => point.trade)
+          .filter((trade, index, arr) => arr.findIndex(t => t.deal === trade.deal) === index); // Remove duplicates
+        
+        drawdownTrades = tradesInDrawdown;
       }
 
       // If in drawdown and this is a new maximum drawdown, update or create event
@@ -145,26 +182,26 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
           // Update existing event if this is a deeper drawdown
           const event = events[existingEventIndex];
           if (drawdownPercent > event.drawdownPercent) {
-            console.log(`Updating drawdown event: ${drawdownPercent.toFixed(2)}% at ${trade.time}`);
-            event.endDate = trade.time;
-            event.troughBalance = runningBalance;
+            console.log(`Updating drawdown event: ${drawdownPercent.toFixed(2)}% at ${currentPoint.time}`);
+            event.endDate = currentPoint.time;
+            event.troughBalance = currentBalance;
             event.drawdownPercent = drawdownPercent;
             event.drawdownAmount = drawdownAmount;
-            event.duration = (new Date(trade.time).getTime() - new Date(event.startDate).getTime()) / (1000 * 60 * 60);
+            event.duration = (new Date(currentPoint.time).getTime() - new Date(event.startDate).getTime()) / (1000 * 60 * 60);
             event.triggerTrades = [...filteredTriggerTrades];
             event.tradeTypes = tradeTypes;
           }
         } else {
           // Create new event
-          console.log(`Creating new drawdown event: ${drawdownPercent.toFixed(2)}% from ${drawdownStart} to ${trade.time}`);
+          console.log(`Creating new drawdown event: ${drawdownPercent.toFixed(2)}% from ${drawdownStart} to ${currentPoint.time}`);
           events.push({
             startDate: drawdownStart,
-            endDate: trade.time,
+            endDate: currentPoint.time,
             peakBalance,
-            troughBalance: runningBalance,
+            troughBalance: currentBalance,
             drawdownPercent,
             drawdownAmount,
-            duration: (new Date(trade.time).getTime() - new Date(drawdownStart).getTime()) / (1000 * 60 * 60),
+            duration: (new Date(currentPoint.time).getTime() - new Date(drawdownStart).getTime()) / (1000 * 60 * 60),
             triggerTrades: [...filteredTriggerTrades],
             tradeTypes
           });
