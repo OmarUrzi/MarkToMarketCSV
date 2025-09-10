@@ -680,31 +680,16 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                 #
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Peak Timestamp
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Peak Balance
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Valley Timestamp
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Valley Balance
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Drawdown %
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Drawdown Amount
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Drawdown %
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Duration
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Buy/Sell Trades
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Recovery Timestamp
               </th>
             </tr>
           </thead>
@@ -719,16 +704,11 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                       <button
                         onClick={() => toggleRowExpansion(index)}
                         className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
-                        disabled={event.triggerTrades.length === 0}
                       >
-                        {event.triggerTrades.length > 0 ? (
-                          isExpanded ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4" />
                         ) : (
-                          <span className="text-xs text-gray-300">-</span>
+                          <ChevronRight className="h-4 w-4" />
                         )}
                       </button>
                     </td>
@@ -736,124 +716,163 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                       {index + 1}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatDate(event.peakTimestamp)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(event.peakBalance)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                      {formatDate(event.valleyTimestamp)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">
-                      {formatCurrency(event.valleyBalance)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {event.drawdownPercent.toFixed(2)}%
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatCurrency(event.drawdownAmount)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {event.duration.toFixed(1)}h
+                      <span className="font-medium text-red-600">
+                        {event.drawdownPercent.toFixed(2)}%
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      <div className="flex space-x-2">
-                        <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
-                          B: {event.tradeTypes.buyCount}
-                        </span>
-                        <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">
-                          S: {event.tradeTypes.sellCount}
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 mt-1">
-                        Vol: {event.tradeTypes.totalVolume.toFixed(2)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {event.recoveryTimestamp ? (
-                        <div>
-                          <div className="text-green-600 font-medium">Recovered</div>
-                          <div className="text-xs text-gray-500">
-                            {formatDate(event.recoveryTimestamp)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            Total Duration: {event.recoveryDuration?.toFixed(1)}h
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-orange-600">Ongoing</span>
-                      )}
+                      <span className="font-medium">
+                        {event.duration.toFixed(1)}h
+                      </span>
                     </td>
                   </tr>
                   
-                  {isExpanded && event.triggerTrades.length > 0 && (
+                  {isExpanded && (
                     <tr>
-                      <td colSpan={11} className="px-6 py-4 bg-gray-50">
+                      <td colSpan={5} className="px-6 py-4 bg-gray-50">
                         <div className="space-y-3">
-                          <h4 className="text-sm font-medium text-gray-900 mb-3">
-                            Drawdown Trigger Trades ({event.triggerTrades.length} trades)
+                          <h4 className="text-lg font-medium text-gray-900 mb-4">
+                            Drawdown Details - Event #{index + 1}
                           </h4>
-                          <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
-                              <thead className="bg-gray-100">
-                                <tr>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Deal</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Direction</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Volume</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
-                                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Balance</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-200">
-                                {event.triggerTrades.map((trade, tradeIndex) => (
-                                  <tr key={tradeIndex} className="hover:bg-gray-50">
-                                    <td className="px-4 py-2 text-sm text-gray-900">
-                                      {formatDate(trade.time)}
-                                    </td>
-                                    <td className="px-4 py-2 text-sm text-gray-900">{trade.deal}</td>
-                                    <td className="px-4 py-2 text-sm text-gray-900 font-medium">{trade.symbol}</td>
-                                    <td className="px-4 py-2 text-sm">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        trade.type.toLowerCase() === 'buy' 
-                                          ? 'bg-green-100 text-green-800' 
-                                          : 'bg-red-100 text-red-800'
-                                      }`}>
-                                        {trade.type.toUpperCase()}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-2 text-sm">
-                                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        trade.direction.toLowerCase() === 'in' 
-                                          ? 'bg-blue-100 text-blue-800' 
-                                          : 'bg-orange-100 text-orange-800'
-                                      }`}>
-                                        {trade.direction.toUpperCase()}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-2 text-sm text-gray-900">{trade.volume}</td>
-                                    <td className="px-4 py-2 text-sm text-gray-900">
-                                      {formatCurrency(trade.price)}
-                                    </td>
-                                    <td className="px-4 py-2 text-sm">
-                                      <span className={`font-medium ${
-                                        parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 
-                                          ? 'text-green-600' 
-                                          : 'text-red-600'
-                                      }`}>
-                                        {formatCurrency(trade.profit)}
-                                      </span>
-                                    </td>
-                                    <td className="px-4 py-2 text-sm text-gray-900">
-                                      {formatCurrency(trade.balance)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                          
+                          {/* Detailed Information Grid */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                            <div className="bg-white p-4 rounded-lg border">
+                              <div className="text-sm text-gray-500">Peak Timestamp</div>
+                              <div className="text-lg font-medium text-gray-900">
+                                {formatDate(event.peakTimestamp)}
+                              </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg border">
+                              <div className="text-sm text-gray-500">Peak Balance</div>
+                              <div className="text-lg font-medium text-green-600">
+                                {formatCurrency(event.peakBalance)}
+                              </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg border">
+                              <div className="text-sm text-gray-500">Valley Timestamp</div>
+                              <div className="text-lg font-medium text-gray-900">
+                                {formatDate(event.valleyTimestamp)}
+                              </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg border">
+                              <div className="text-sm text-gray-500">Valley Balance</div>
+                              <div className="text-lg font-medium text-red-600">
+                                {formatCurrency(event.valleyBalance)}
+                              </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg border">
+                              <div className="text-sm text-gray-500">Recovery Status</div>
+                              <div className="text-lg font-medium">
+                                {event.recoveryTimestamp ? (
+                                  <div>
+                                    <div className="text-green-600 font-medium">Recovered</div>
+                                    <div className="text-sm text-gray-500">
+                                      {formatDate(event.recoveryTimestamp)}
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                      Total: {event.recoveryDuration?.toFixed(1)}h
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-orange-600">Ongoing</span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="bg-white p-4 rounded-lg border">
+                              <div className="text-sm text-gray-500">Trade Statistics</div>
+                              <div className="text-lg font-medium">
+                                <div className="flex space-x-2 mb-1">
+                                  <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">
+                                    Buy: {event.tradeTypes.buyCount}
+                                  </span>
+                                  <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">
+                                    Sell: {event.tradeTypes.sellCount}
+                                  </span>
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  Volume: {event.tradeTypes.totalVolume.toFixed(2)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Trigger Trades Table */}
+                          {event.triggerTrades.length > 0 && (
+                            <div>
+                              <h5 className="text-md font-medium text-gray-900 mb-3">
+                                Drawdown Trigger Trades ({event.triggerTrades.length} trades)
+                              </h5>
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200 bg-white rounded-lg shadow-sm">
+                                  <thead className="bg-gray-100">
+                                    <tr>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Time</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Deal</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Symbol</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Direction</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Volume</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Price</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
+                                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Balance</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-200">
+                                    {event.triggerTrades.map((trade, tradeIndex) => (
+                                      <tr key={tradeIndex} className="hover:bg-gray-50">
+                                        <td className="px-4 py-2 text-sm text-gray-900">
+                                          {formatDate(trade.time)}
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">{trade.deal}</td>
+                                        <td className="px-4 py-2 text-sm text-gray-900 font-medium">{trade.symbol}</td>
+                                        <td className="px-4 py-2 text-sm">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            trade.type.toLowerCase() === 'buy' 
+                                              ? 'bg-green-100 text-green-800' 
+                                              : 'bg-red-100 text-red-800'
+                                          }`}>
+                                            {trade.type.toUpperCase()}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-sm">
+                                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            trade.direction.toLowerCase() === 'in' 
+                                              ? 'bg-blue-100 text-blue-800' 
+                                              : 'bg-orange-100 text-orange-800'
+                                          }`}>
+                                            {trade.direction.toUpperCase()}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">{trade.volume}</td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">
+                                          {formatCurrency(trade.price)}
+                                        </td>
+                                        <td className="px-4 py-2 text-sm">
+                                          <span className={`font-medium ${
+                                            parseFloat(trade.profit.replace(/[^\d.-]/g, '') || '0') >= 0 
+                                              ? 'text-green-600' 
+                                              : 'text-red-600'
+                                          }`}>
+                                            {formatCurrency(trade.profit)}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 text-sm text-gray-900">
+                                          {formatCurrency(trade.balance)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
                           </div>
                         </div>
                       </td>
