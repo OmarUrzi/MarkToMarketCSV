@@ -867,7 +867,6 @@ export const DrawdownCalculator: React.FC<DrawdownCalculatorProps> = ({
                             </div>
                           )}
                           </div>
-                        </div>
                       </td>
                     </tr>
                   )}
